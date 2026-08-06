@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>TallyAway</title>
+<meta name="description" content="Reiseausgaben unterwegs erfassen – offline, mit Währungsumrechnung und CSV-Export.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d9488">
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TallyAway">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
+<style>
+  :root {
+    --bg: #f2f5f7;
+    --card: #ffffff;
+    --accent: #0d9488;
+    --accent-deep: #0f766e;
+    --accent-soft: #e6f4f2;
+    --on-accent: #ffffff;
+    --ink: #10201e;
+    --muted: #5b6b6f;
+    --line: #e4eaec;
+    --danger: #c2410c;
+    --danger-bg: #fdf0e9;
+    --warn: #b45309;
+    --nav-bg: rgba(255,255,255,.94);
+    --toast-bg: #10201e;
+    --toast-ink: #ffffff;
+    --radius: 18px;
+    --shadow: 0 1px 3px rgba(16,32,30,.06), 0 6px 20px rgba(16,32,30,.05);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+  html[data-theme="dark"] {
+    --bg: #0e1517;
+    --card: #192426;
+    --accent: #0fa896;            /* validated on dark surface */
+    --accent-deep: #2dd4bf;
+    --accent-soft: #12332f;
+    --on-accent: #04211d;
+    --ink: #e6eeee;
+    --muted: #8fa3a6;
+    --line: #243133;
+    --danger: #fb923c;
+    --danger-bg: #3a2415;
+    --warn: #fbbf24;
+    --nav-bg: rgba(17,26,28,.94);
+    --toast-bg: #e6eeee;
+    --toast-ink: #10201e;
+    --shadow: 0 1px 3px rgba(0,0,0,.35), 0 6px 20px rgba(0,0,0,.28);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg); color: var(--ink);
+    padding-top: var(--safe-top);
+    overscroll-behavior-y: none;
+  }
+  #app { max-width: 520px; margin: 0 auto; padding: 16px 16px calc(96px + var(--safe-bottom)); min-height: 100vh; }
+
+  /* ---------- Generic ---------- */
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; margin-bottom: 14px; }
+  .h1 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .h2 { font-size: 15px; font-weight: 650; margin-bottom: 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  button { font-family: inherit; border: none; background: none; color: inherit; cursor: pointer; font-size: 15px; }
+  .btn { background: var(--accent); color: var(--on-accent); font-weight: 650; padding: 14px 20px; border-radius: 14px; width: 100%; font-size: 16px; }
+  .btn:active { background: var(--accent-deep); }
+  .btn.secondary { background: var(--accent-soft); color: var(--accent-deep); }
+  .btn.ghost { background: transparent; color: var(--muted); }
+  .btn.danger { background: var(--danger-bg); color: var(--danger); }
+  input, select {
+    font-family: inherit; font-size: 16px; width: 100%;
+    padding: 13px 14px; border: 1.5px solid var(--line); border-radius: 13px;
+    background: var(--card); color: var(--ink); outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  /* iOS centers the value of date inputs and collapses empty ones — force
+     left alignment and a stable height so they line up with text inputs */
+  input[type="date"] { -webkit-appearance: none; appearance: none; min-height: 48px; text-align: left; }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  /* button styled as a select field (opens the country sheet) */
+  .select-btn {
+    font-family: inherit; font-size: 16px; width: 100%; text-align: left;
+    padding: 13px 14px; border: 1.5px solid var(--line); border-radius: 13px;
+    background: var(--card); color: var(--ink);
+  }
+  .select-btn.placeholder { color: var(--muted); }
+  label.field { display: block; margin-bottom: 12px; }
+  label.field > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-weight: 550; }
+
+  /* ---------- Top bar ---------- */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 2px 16px; }
+  .topbar .title { font-size: 26px; font-weight: 800; letter-spacing: -.03em; }
+  .trip-chip { background: var(--card); box-shadow: var(--shadow); border-radius: 999px; padding: 8px 12px; font-size: 12.5px; font-weight: 650; color: var(--accent-deep); max-width: 52vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .icon-btn { background: var(--card); box-shadow: var(--shadow); border-radius: 999px; width: 38px; height: 38px; font-size: 17px; flex: none; display: flex; align-items: center; justify-content: center; }
+
+  /* ---------- Budget ring ---------- */
+  .ring-wrap { display: flex; align-items: center; gap: 18px; }
+  .ring { position: relative; width: 132px; height: 132px; flex: none; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring .center .big { font-size: 21px; font-weight: 800; letter-spacing: -.02em; }
+  .ring .center .sub { font-size: 11px; color: var(--muted); }
+  .kpis { flex: 1; display: grid; gap: 10px; }
+  .kpi .v { font-size: 17px; font-weight: 750; letter-spacing: -.01em; }
+  .kpi .l { font-size: 12px; color: var(--muted); }
+  .kpi .v.warn { color: var(--danger); }
+
+  /* ---------- Mini bar chart ---------- */
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 72px; margin-top: 6px; }
+  .spark .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+  .spark .bar { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; opacity: .45; }
+  .spark .col.today .bar { opacity: 1; }
+  /* advance bookings, summed into one bar in front of the trip window */
+  .spark .col.pre { border-right: 1px dashed var(--line); padding-right: 4px; margin-right: 4px; }
+  .spark .col.pre .bar { background: var(--muted); opacity: .5; }
+  .spark .d { font-size: 9px; color: var(--muted); }
+  /* long trips: the chart scrolls horizontally (swipe like the chip row) —
+     every day keeps a full-size horizontal number and a decently wide bar */
+  .spark.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .spark.scroll::-webkit-scrollbar { display: none; }
+  .spark.scroll .col { flex: 0 0 24px; }
+
+  /* ---------- Category bars ---------- */
+  .cat-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+  .cat-ico { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 17px; flex: none; }
+  .cat-mid { flex: 1; min-width: 0; }
+  .cat-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cat-track { height: 6px; background: var(--bg); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+  .cat-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+  .cat-amt { font-size: 13px; font-weight: 700; flex: none; }
+
+  /* ---------- Expense list ---------- */
+  .day-head { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 4px 6px; display: flex; justify-content: space-between; }
+  .exp { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; margin-bottom: 8px; }
+  .exp .info { flex: 1; min-width: 0; }
+  .exp .t { font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .exp .s { font-size: 12px; color: var(--muted); }
+  .exp .amts { text-align: right; flex: none; }
+  .exp .home { font-size: 14.5px; font-weight: 750; }
+  .exp .orig { font-size: 11.5px; color: var(--muted); }
+
+  /* ---------- Add screen ---------- */
+  .amount-display { text-align: center; padding: 8px 0 2px; }
+  .amount-display .val { font-size: 52px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+  .amount-display .conv { font-size: 14px; color: var(--muted); min-height: 20px; }
+  .cur-row { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 14px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .cur-row::-webkit-scrollbar { display: none; }
+  .chip { flex: none; padding: 9px 16px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); font-size: 14px; font-weight: 650; color: var(--muted); }
+  .chip.on { background: var(--accent); color: var(--on-accent); }
+  .cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 78px; gap: 8px; margin-bottom: 14px; }
+  /* strictly identical tiles: HARD 78px row height, icon and name rows are
+     fixed and clipped — oversized emoji glyphs (iOS) can no longer stretch
+     a tile (owner: symmetric) */
+  .cat-cell { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 6px 4px; text-align: center; border: 2px solid transparent; height: 100%; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  .cat-cell .e { font-size: 21px; line-height: 26px; height: 26px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .cat-cell .n { font-size: 9.5px; color: var(--muted); line-height: 1.2; font-weight: 600; height: 23px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .cat-cell.on { border-color: var(--accent); background: var(--accent-soft); }
+  .cat-cell.on .n { color: var(--accent-deep); }
+  /* The keypad floats as a fixed panel above the nav (like the reference
+     calculator overlay the owner showed): always reachable without scrolling,
+     content scrolls beneath it, tapping the amount toggles it. */
+  .keypad-wrap {
+    position: fixed; left: 0; right: 0; bottom: calc(64px + var(--safe-bottom)); z-index: 40;
+    background: var(--bg); padding: 10px 16px 8px;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 24px rgba(16,32,30,.10);
+  }
+  .keypad-wrap .keypad { max-width: 520px; margin: 0 auto; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .key { background: var(--card); box-shadow: var(--shadow); border-radius: 14px; min-height: 58px; padding: 0; font-size: 22px; font-weight: 650; text-align: center; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
+  .key:active { background: var(--accent); color: var(--on-accent); transform: scale(0.92); }
+  /* JS-driven press flash: :active alone is invisible on fast iOS taps.
+     Full accent (not accent-soft) — owner wants clearly visible feedback. */
+  @keyframes keyflash { 0%, 45% { background: var(--accent); color: var(--on-accent); transform: scale(0.92); } 100% { background: var(--card); transform: scale(1); } }
+  .key.pressed { animation: keyflash 260ms ease-out; }
+  .payer-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+
+  /* ---------- Bottom nav ---------- */
+  .nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+    padding: 8px 8px calc(8px + var(--safe-bottom));
+  }
+  .nav .inner { max-width: 520px; margin: 0 auto; display: flex; align-items: center; }
+  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; color: var(--muted); font-size: 10.5px; font-weight: 600; }
+  .nav-btn .i { font-size: 21px; line-height: 1; }
+  .nav-btn.on { color: var(--accent-deep); }
+  .fab {
+    flex: none; width: 58px; height: 58px; margin: -26px 6px 0; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent); font-size: 30px; font-weight: 500;
+    box-shadow: 0 6px 18px rgba(13,148,136,.4); display: flex; align-items: center; justify-content: center;
+    /* the "+" glyph sits low in its em box — flex centers the box, not the
+       ink; measured 3px offset, compensated here so the plus is dead center */
+    padding-bottom: 6px;
+  }
+  .fab:active { background: var(--accent-deep); }
+
+  /* ---------- Misc ---------- */
+  .empty { text-align: center; padding: 44px 20px; color: var(--muted); }
+  .empty .e { font-size: 44px; margin-bottom: 10px; }
+  .list-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 2px; border-bottom: 1px solid var(--line); }
+  .list-item:last-child { border-bottom: none; }
+  .pill { font-size: 11px; font-weight: 700; background: var(--accent-soft); color: var(--accent-deep); border-radius: 999px; padding: 4px 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(110px + var(--safe-bottom)); transform: translateX(-50%);
+    background: var(--toast-bg); color: var(--toast-ink); font-size: 13.5px; font-weight: 600;
+    padding: 10px 18px; border-radius: 999px; opacity: 0; transition: opacity .25s; z-index: 100; pointer-events: none;
+    max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+  /* toast with a tappable action (undo, reload) — must accept the tap */
+  .toast.actionable { pointer-events: auto; }
+  .toast-btn { color: inherit; font-weight: 800; font-size: 13.5px; margin-left: 12px; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+  .refund-row { display: flex; justify-content: center; padding-bottom: 2px; }
+  .refund-row .chip { padding: 6px 14px; font-size: 12.5px; }
+  .overlay { position: fixed; inset: 0; background: rgba(16,32,30,.45); z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--bg); width: 100%; max-width: 520px; border-radius: 22px 22px 0 0; padding: 20px 16px calc(20px + var(--safe-bottom)); max-height: 88vh; overflow-y: auto; }
+  .sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 16px; }
+  .offline-note { font-size: 11.5px; color: var(--muted); text-align: center; margin-top: 6px; }
+  .cur-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; padding: 13px 6px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .cur-item b { flex: none; width: 52px; }
+  .cur-item span { flex: 1; text-align: right; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav class="nav"><div class="inner" id="navInner"></div></nav>
+<div id="sheetHost"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   TallyAway – mobile travel expense tracker (PWA)
+   Architecture: single-file vanilla JS, state in localStorage,
+   full re-render per navigation.
+   ===================================================================== */
+
+/* ---------------- Constants ---------------- */
+/* NOTE: the app was renamed to TallyAway (2026-08). The localStorage keys
+   below keep their original "urlaubskasse" names FOREVER — changing them
+   would orphan the data already stored on the owner's phones. */
+const LS_KEY = "urlaubskasse_v1";
+const SCHEMA_VERSION = 3;
+/* Reloading mid-session should keep you where you are; opening the app after
+   a break should start on the dashboard. So the view is restored only within
+   this window, and only for views that carry no in-memory draft state
+   (add / add-trip / trip-edit would come back as empty forms).
+   UI_KEY is its own tiny entry: written on every view change without
+   re-serialising the whole state, and never part of the JSON backup.
+   These MUST stay above `let state = loadState()` — restoreUi() runs there. */
+const UI_KEY = "urlaubskasse_ui";
+/* Cloud backup target (Google Apps Script /exec URL) — DEVICE-LOCAL secret.
+   Deliberately its own key: it must never travel inside the state object,
+   backup JSONs, or exports. */
+const CLOUD_KEY = "urlaubskasse_cloud";
+const RESTORE_VIEWS = ["home", "expenses", "stats", "trips", "more"];
+const RESTORE_WINDOW_MS = 30 * 60 * 1000;
+/* views holding uncontrolled form inputs — must never be re-rendered from
+   background work (see refreshRates) */
+const FORM_VIEWS = ["add", "add-trip", "trip-edit"];
+
+const CATEGORIES = [
+  { id: "essen",     name: "Restaurant & Café",         icon: "🍽️" },
+  { id: "supermarkt",name: "Supermarkt & Snacks",       icon: "🛒" },
+  { id: "hotel",     name: "Unterkunft",                icon: "🏨" },
+  { id: "flug",      name: "Flug",                      icon: "✈️" },
+  { id: "taxi",      name: "Taxi",                      icon: "🚕" },
+  { id: "oepnv",     name: "Bahn, Fähre & ÖPNV",        icon: "🚆" },
+  { id: "mietwagen", name: "Mietwagen & Roller",        icon: "🛵" },
+  { id: "tanken",    name: "Tanken",                    icon: "⛽" },
+  { id: "ausflug",   name: "Ausflüge & Touren",         icon: "🎟️" },
+  { id: "beauty",    name: "Massage & Beauty",          icon: "💆" },
+  { id: "apotheke",  name: "Drogerie & Apotheke",       icon: "💊" },
+  { id: "geschenke", name: "Mitbringsel & Geschenke",   icon: "🎁" },
+  { id: "shopping",  name: "Shopping",                  icon: "🛍️" },
+  { id: "atm",       name: "Gebühren",                  icon: "💳" },
+  { id: "telekom",   name: "SIM & Internet",            icon: "📱" },
+  { id: "visum",     name: "Visum",                     icon: "🛂" },
+  { id: "parken",    name: "Parken",                    icon: "🅿️" },
+  { id: "ausruestung",name: "Ausrüstung & Vorbereitung",icon: "🎒" },
+  { id: "sonstiges", name: "Sonstiges",                 icon: "📦" },
+];
+
+/* Fallback rates: units of currency per 1 EUR (approx snapshot; live rates
+   override these whenever the device is online). */
+const FALLBACK_RATES = {
+  EUR: 1, USD: 1.16, MXN: 21.5, GBP: 0.85, CHF: 0.93, THB: 37.5, VND: 29500,
+  JPY: 172, TRY: 47, IDR: 18900, AUD: 1.75, CAD: 1.58, DKK: 7.46, SEK: 11.2,
+  NOK: 11.7, PLN: 4.25, CZK: 24.6, HUF: 395, MAD: 10.5, EGP: 55, AED: 4.26,
+  DOP: 70, CRC: 590, COP: 4600, PEN: 4.3, BRL: 6.3, ZAR: 20.5, INR: 100,
+  CNY: 8.3, KRW: 1600, PHP: 66, MYR: 4.9, SGD: 1.5, NZD: 1.9, ISK: 146,
+  RON: 5.0, BGN: 1.96, HKD: 9.1, TWD: 34, LKR: 350, NPR: 160, KES: 150,
+  TZS: 3000, ARS: 1450, CLP: 1100, UYU: 47, GTQ: 9.0, HNL: 30, NIO: 43,
+  PAB: 1.16, BOB: 8.0, JOD: 0.82, ILS: 3.9, OMR: 0.45, QAR: 4.2, SAR: 4.35,
+  KWD: 0.36, BHD: 0.44, GEL: 3.2, AMD: 450, AZN: 1.97, UZS: 14500, KZT: 610,
+  MNT: 4100, KHR: 4700, LAK: 25000, MMK: 2400, BDT: 140, PKR: 325, FJD: 2.6,
+  XOF: 656, XAF: 656, XPF: 119, MUR: 53, SCR: 17, MVR: 17.9, CUP: 28, JMD: 182,
+  TTD: 7.9, BBD: 2.3, BSD: 1.16, AWG: 2.1, ANG: 2.1, RSD: 117, MKD: 61.5,
+  ALL: 98, BAM: 1.96, MDL: 20, UAH: 48, CVE: 110, NAD: 20.5, PYG: 8200,
+  ZMW: 27, TND: 3.35, UGX: 4200, GHS: 12.3, VUV: 138, WST: 3.2, TOP: 2.7,
+  AFN: 78, DZD: 151, AOA: 1060, XCD: 3.13, ETB: 165, BYN: 3.8, BZD: 2.33,
+  BTN: 100, BWP: 15.5, BND: 1.5, BIF: 3440, DJF: 206, ERN: 17.4, SZL: 20.5,
+  GMD: 84, GNF: 10050, GYD: 243, HTG: 152, IQD: 1520, IRR: 49000, KGS: 101,
+  KMF: 492, CDF: 3320, KPW: 1045, LSL: 20.5, LBP: 104000, LRD: 214, LYD: 5.6,
+  MGA: 5250, MWK: 2015, MRU: 46, MZN: 74, NGN: 1790, PGK: 4.85, RWF: 1680,
+  SBD: 9.8, STN: 24.5, SDG: 700, SSP: 5250, SRD: 43, SYP: 15100, TJS: 12.2,
+  TMT: 4.06, VES: 170, YER: 290, RUB: 92, SLE: 26.5, SOS: 663,
+};
+
+/* Destination → default currency. COMPLETE list: all UN members, observers
+   (Vatikanstadt, Palästina) and common travel territories (Hongkong, Taiwan,
+   Kosovo). German names, alphabetical. Sets the trip's default entry
+   currency: Mexiko→MXN, Japan→JPY, Euro-Länder→EUR…
+   Simbabwe uses USD (de-facto multi-currency system). */
+const COUNTRIES = [
+  ["Afghanistan","AFN"],["Ägypten","EGP"],["Albanien","ALL"],["Algerien","DZD"],
+  ["Andorra","EUR"],["Angola","AOA"],["Antigua und Barbuda","XCD"],
+  ["Äquatorialguinea","XAF"],["Argentinien","ARS"],["Armenien","AMD"],
+  ["Aserbaidschan","AZN"],["Äthiopien","ETB"],["Australien","AUD"],
+  ["Bahamas","BSD"],["Bahrain","BHD"],["Bangladesch","BDT"],["Barbados","BBD"],
+  ["Belarus","BYN"],["Belgien","EUR"],["Belize","BZD"],["Benin","XOF"],
+  ["Bhutan","BTN"],["Bolivien","BOB"],["Bosnien und Herzegowina","BAM"],
+  ["Botswana","BWP"],["Brasilien","BRL"],["Brunei","BND"],["Bulgarien","BGN"],
+  ["Burkina Faso","XOF"],["Burundi","BIF"],["Chile","CLP"],["China","CNY"],
+  ["Costa Rica","CRC"],["Dänemark","DKK"],["Deutschland","EUR"],
+  ["Dominica","XCD"],["Dominikanische Republik","DOP"],["Dschibuti","DJF"],
+  ["Ecuador","USD"],["El Salvador","USD"],["Elfenbeinküste","XOF"],
+  ["Eritrea","ERN"],["Estland","EUR"],["Eswatini","SZL"],["Fidschi","FJD"],
+  ["Finnland","EUR"],["Frankreich","EUR"],["Gabun","XAF"],["Gambia","GMD"],
+  ["Georgien","GEL"],["Ghana","GHS"],["Grenada","XCD"],["Griechenland","EUR"],
+  ["Großbritannien","GBP"],["Guatemala","GTQ"],["Guinea","GNF"],
+  ["Guinea-Bissau","XOF"],["Guyana","GYD"],["Haiti","HTG"],["Honduras","HNL"],
+  ["Hongkong","HKD"],["Indien","INR"],["Indonesien","IDR"],["Irak","IQD"],
+  ["Iran","IRR"],["Irland","EUR"],["Island","ISK"],["Israel","ILS"],
+  ["Italien","EUR"],["Jamaika","JMD"],["Japan","JPY"],["Jemen","YER"],
+  ["Jordanien","JOD"],["Kambodscha","KHR"],["Kamerun","XAF"],["Kanada","CAD"],
+  ["Kap Verde","CVE"],["Kasachstan","KZT"],["Katar","QAR"],["Kenia","KES"],
+  ["Kirgisistan","KGS"],["Kiribati","AUD"],["Kolumbien","COP"],
+  ["Komoren","KMF"],["Kongo (Dem. Republik)","CDF"],["Kongo (Republik)","XAF"],
+  ["Kosovo","EUR"],["Kroatien","EUR"],["Kuba","CUP"],["Kuwait","KWD"],
+  ["Laos","LAK"],["Lesotho","LSL"],["Lettland","EUR"],["Libanon","LBP"],
+  ["Liberia","LRD"],["Libyen","LYD"],["Liechtenstein","CHF"],["Litauen","EUR"],
+  ["Luxemburg","EUR"],["Madagaskar","MGA"],["Malawi","MWK"],["Malaysia","MYR"],
+  ["Malediven","MVR"],["Mali","XOF"],["Malta","EUR"],["Marokko","MAD"],
+  ["Marshallinseln","USD"],["Mauretanien","MRU"],["Mauritius","MUR"],
+  ["Mexiko","MXN"],["Mikronesien","USD"],["Moldau","MDL"],["Monaco","EUR"],
+  ["Mongolei","MNT"],["Montenegro","EUR"],["Mosambik","MZN"],["Myanmar","MMK"],
+  ["Namibia","NAD"],["Nauru","AUD"],["Nepal","NPR"],["Neuseeland","NZD"],
+  ["Nicaragua","NIO"],["Niederlande","EUR"],["Niger","XOF"],["Nigeria","NGN"],
+  ["Nordkorea","KPW"],["Nordmazedonien","MKD"],["Norwegen","NOK"],
+  ["Oman","OMR"],["Österreich","EUR"],["Osttimor","USD"],["Pakistan","PKR"],
+  ["Palästina","ILS"],["Palau","USD"],["Panama","PAB"],
+  ["Papua-Neuguinea","PGK"],["Paraguay","PYG"],["Peru","PEN"],
+  ["Philippinen","PHP"],["Polen","PLN"],["Portugal","EUR"],["Ruanda","RWF"],
+  ["Rumänien","RON"],["Russland","RUB"],["Salomonen","SBD"],["Sambia","ZMW"],
+  ["Samoa","WST"],["San Marino","EUR"],["São Tomé und Príncipe","STN"],
+  ["Saudi-Arabien","SAR"],["Schweden","SEK"],["Schweiz","CHF"],
+  ["Senegal","XOF"],["Serbien","RSD"],["Seychellen","SCR"],
+  ["Sierra Leone","SLE"],["Simbabwe","USD"],["Singapur","SGD"],
+  ["Slowakei","EUR"],["Slowenien","EUR"],["Somalia","SOS"],["Spanien","EUR"],
+  ["Sri Lanka","LKR"],["St. Kitts und Nevis","XCD"],["St. Lucia","XCD"],
+  ["St. Vincent und die Grenadinen","XCD"],["Südafrika","ZAR"],
+  ["Sudan","SDG"],["Südkorea","KRW"],["Südsudan","SSP"],["Suriname","SRD"],
+  ["Syrien","SYP"],["Tadschikistan","TJS"],["Taiwan","TWD"],
+  ["Tansania","TZS"],["Thailand","THB"],["Togo","XOF"],["Tonga","TOP"],
+  ["Trinidad und Tobago","TTD"],["Tschad","XAF"],["Tschechien","CZK"],
+  ["Tunesien","TND"],["Türkei","TRY"],["Turkmenistan","TMT"],["Tuvalu","AUD"],
+  ["Uganda","UGX"],["Ukraine","UAH"],["Ungarn","HUF"],["Uruguay","UYU"],
+  ["USA","USD"],["Usbekistan","UZS"],["Vanuatu","VUV"],["Vatikanstadt","EUR"],
+  ["Venezuela","VES"],["Vereinigte Arabische Emirate","AED"],
+  ["Vietnam","VND"],["Zentralafrikanische Republik","XAF"],["Zypern","EUR"],
+];
+
+/* ---------------- State ---------------- */
+function defaultState() {
+  return {
+    version: SCHEMA_VERSION,
+    trips: [],
+    activeTripId: null,
+    travelers: ["Ich"],
+    homeCurrency: "EUR",
+    recentCurrencies: ["EUR", "USD"],
+    rates: { base: "EUR", date: null, map: { ...FALLBACK_RATES }, source: "fallback" },
+    settings: { theme: "auto" },
+    ui: { view: "home" },
+    lastBackupAt: null,        /* ISO of the last JSON backup (drives the reminder) */
+    backupSnoozedUntil: null,  /* ISO; "Später" on the reminder snoozes 7 days */
+  };
+}
+
+let state = loadState();
+let draft = null;          // in-progress expense entry
+let editingExpenseId = null;
+
+/* Schema migrations. v1 → v2: travelers moved from global state to per-trip
+   (trip.travelers); the old global list seeds every existing trip. The legacy
+   state.travelers field is kept untouched (never silently drop stored data).
+   v2 → v3: multi-destination trips — trip.countries [{name, cur}] replaces the
+   single trip.country as source of truth; trip.country stays as mirror of the
+   first entry, trip.currency stays the independent default entry currency. */
+function migrateState(s) {
+  if ((s.version || 1) < 2) {
+    const global = Array.isArray(s.travelers) && s.travelers.length ? s.travelers : ["Ich"];
+    for (const t of s.trips || []) if (!Array.isArray(t.travelers) || !t.travelers.length) t.travelers = [...global];
+    s.version = 2;
+  }
+  if (s.version < 3) {
+    for (const t of s.trips || []) if (!Array.isArray(t.countries))
+      t.countries = t.country ? [{ name: t.country, cur: t.currency || s.homeCurrency || "EUR" }] : [];
+    s.version = 3;
+  }
+  for (const t of s.trips || []) {
+    if (!Array.isArray(t.travelers) || !t.travelers.length) t.travelers = ["Ich"];
+    if (!Array.isArray(t.countries)) t.countries = [];
+  }
+  return s;
+}
+
+function saveUi() {
+  try { localStorage.setItem(UI_KEY, JSON.stringify({ view: state.ui.view, at: Date.now() })); } catch (e) { /* quota — ignore */ }
+}
+function restoreUi() {
+  try {
+    const ui = JSON.parse(localStorage.getItem(UI_KEY) || "null");
+    const recent = ui && ui.at && Date.now() - ui.at < RESTORE_WINDOW_MS;
+    return { view: recent && RESTORE_VIEWS.includes(ui.view) ? ui.view : "home" };
+  } catch (e) { return { view: "home" }; }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return defaultState();
+    const s = JSON.parse(raw);
+    const d = defaultState();
+    return migrateState({ ...d, ...s, rates: { ...d.rates, ...(s.rates || {}) }, settings: { ...d.settings, ...(s.settings || {}) }, ui: restoreUi() });
+  } catch (e) {
+    console.error("State load failed", e);
+    return defaultState();
+  }
+}
+function saveState() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+  catch (e) { toast("Speichern fehlgeschlagen – Speicher voll?"); }
+}
+
+/* ---------------- Helpers ---------------- */
+const $ = (sel) => document.querySelector(sel);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function fmt(n, cur) {
+  cur = cur || state.homeCurrency;
+  try {
+    return new Intl.NumberFormat("de-DE", { style: "currency", currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  } catch { return n.toFixed(2) + " " + cur; }
+}
+function fmtShort(n, cur) {
+  cur = cur || state.homeCurrency;
+  const sym = { EUR: "€", USD: "$", GBP: "£", MXN: "MX$", THB: "฿", JPY: "¥" }[cur] || cur;
+  return (Math.round(n * 100) / 100).toLocaleString("de-DE", { maximumFractionDigits: n >= 100 ? 0 : 2 }) + " " + sym;
+}
+function todayISO() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function dateLabel(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const t = todayISO();
+  if (iso === t) return "Heute";
+  const yd = new Date(); yd.setDate(yd.getDate() - 1);
+  if (dt.toDateString() === yd.toDateString()) return "Gestern";
+  return dt.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+}
+function catById(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
+function activeTrip() { return state.trips.find(t => t.id === state.activeTripId) || null; }
+
+/* ---------------- Theme ---------------- */
+function applyTheme() {
+  const pref = (state.settings && state.settings.theme) || "auto";
+  const dark = pref === "dark" || (pref === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.content = dark ? "#0e1517" : "#0d9488";
+}
+function setTheme(t) { state.settings.theme = t; saveState(); applyTheme(); render(); }
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+
+/* ---------------- Currency names & picker sheet ---------------- */
+let _dn = null;
+function curName(code) {
+  try {
+    _dn = _dn || new Intl.DisplayNames(["de"], { type: "currency" });
+    return _dn.of(code) || code;
+  } catch { return code; }
+}
+function allCurrencyCodes() {
+  return [...new Set([...Object.keys(state.rates.map), ...Object.keys(FALLBACK_RATES)])].sort();
+}
+function curRow(c) {
+  return `<button class="cur-item" onclick="pickCur('${c}')"><b>${c}</b><span class="muted">${esc(curName(c))}</span></button>`;
+}
+let curSheetMode = "draft"; /* "draft" = expense entry, "home" = home currency, "trip" = trip default */
+function openCurSheet(mode) {
+  curSheetMode = mode === "home" || mode === "trip" ? mode : "draft";
+  $("#sheetHost").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeSheet()">
+    <div class="sheet"><div class="sheet-handle"></div>
+      <input id="curSearch" placeholder="Währung suchen (Code oder Name)…" autocomplete="off" oninput="filterCur()">
+      <div id="curList" style="margin-top:10px;">${allCurrencyCodes().map(curRow).join("")}</div>
+    </div></div>`;
+}
+function filterCur() {
+  const q = $("#curSearch").value.trim().toLowerCase();
+  const codes = allCurrencyCodes().filter(c => c.toLowerCase().includes(q) || curName(c).toLowerCase().includes(q));
+  $("#curList").innerHTML = codes.length ? codes.map(curRow).join("") : '<div class="empty">Keine Treffer</div>';
+}
+function pickCur(c) {
+  if (curSheetMode === "home") { closeSheet(); setHomeCurrency(c); return; }
+  if (curSheetMode === "trip") {
+    const t = editingTrip();
+    if (t) { t.currency = c; saveState(); }
+    closeSheet(); render(); return;
+  }
+  draft.currency = c;
+  if (!state.recentCurrencies.includes(c)) { state.recentCurrencies.push(c); if (state.recentCurrencies.length > 6) state.recentCurrencies.shift(); saveState(); }
+  closeSheet(); render();
+}
+function closeSheet() { $("#sheetHost").innerHTML = ""; }
+
+/* ----- Country picker sheet (trip creation) ----- */
+let tripCountrySel = []; /* [{name, cur}] for the add-trip form — reset when that view renders */
+function newTripCountriesHTML() {
+  return tripCountrySel.length
+    ? tripCountrySel.map((c, i) => `<div class="list-item"><b>${esc(c.name)} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeNewTripCountry(${i})">Entfernen</button></div>`).join("")
+    : `<div class="muted" style="padding:2px 2px 6px;">Das erste Ziel setzt die Standard-Währung der Reise.</div>`;
+}
+function paintNewTripCountries() {
+  /* patch in place — a render() would wipe the other uncontrolled inputs */
+  const el = $("#tripCountryList");
+  if (el) el.innerHTML = newTripCountriesHTML();
+}
+function removeNewTripCountry(i) { tripCountrySel.splice(i, 1); paintNewTripCountries(); }
+function countryRow(i) {
+  const [n, c] = COUNTRIES[i];
+  return `<button class="cur-item" onclick="pickCountry(${i})"><b>${c}</b><span class="muted">${esc(n)}</span></button>`;
+}
+let countrySheetMode = "new"; /* "new" = add-trip form, "edit" = trip settings */
+function openCountrySheet(mode) {
+  countrySheetMode = mode === "edit" ? "edit" : "new";
+  $("#sheetHost").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeSheet()">
+    <div class="sheet"><div class="sheet-handle"></div>
+      <input id="countrySearch" placeholder="Land suchen…" autocomplete="off" oninput="filterCountry()">
+      <div id="countryList" style="margin-top:10px;">${COUNTRIES.map((_, i) => countryRow(i)).join("")}</div>
+    </div></div>`;
+}
+function filterCountry() {
+  const q = $("#countrySearch").value.trim().toLowerCase();
+  const idx = COUNTRIES.map((_, i) => i).filter(i =>
+    COUNTRIES[i][0].toLowerCase().includes(q) || COUNTRIES[i][1].toLowerCase().includes(q));
+  $("#countryList").innerHTML = idx.length ? idx.map(countryRow).join("") : '<div class="empty">Keine Treffer</div>';
+}
+function pickCountry(i) {
+  const [n, c] = COUNTRIES[i];
+  if (countrySheetMode === "edit") {
+    const t = editingTrip();
+    if (t) {
+      if (!tripCountries(t).some(x => x.name === n)) {
+        const wasEmpty = !tripCountries(t).length;
+        t.countries = [...tripCountries(t), { name: n, cur: c }];
+        t.country = t.countries[0].name; /* mirror for older code/exports */
+        if (wasEmpty) t.currency = c;    /* first destination sets the default */
+        saveState();
+      } else {
+        toast("Ist schon dabei");
+      }
+    }
+    closeSheet(); render(); return;
+  }
+  if (tripCountrySel.some(x => x.name === n)) { toast("Ist schon dabei"); closeSheet(); return; }
+  tripCountrySel.push({ name: n, cur: c });
+  paintNewTripCountries();
+  closeSheet();
+}
+
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.classList.remove("actionable");
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 2200);
+}
+/* Toast with a tappable action button (delete-undo, update-reload). */
+function toastAction(msg, label, fn, ms) {
+  const el = $("#toast");
+  el.innerHTML = esc(msg) + `<button class="toast-btn" id="toastBtn">${esc(label)}</button>`;
+  el.classList.add("actionable", "show");
+  $("#toastBtn").onclick = () => { el.classList.remove("show", "actionable"); fn(); };
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show", "actionable"), ms || 6000);
+}
+
+/* ---------------- Currency ---------------- */
+function rateFor(cur) {
+  const m = state.rates.map;
+  return m[cur] || FALLBACK_RATES[cur] || null;
+}
+/* Convert an amount in `cur` to the home currency. */
+function toHome(amount, cur) {
+  if (cur === state.homeCurrency) return amount;
+  const rCur = rateFor(cur), rHome = rateFor(state.homeCurrency);
+  if (!rCur || !rHome) return amount;
+  return amount / rCur * rHome;
+}
+async function refreshRates() {
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/EUR", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    if (data && data.result === "success" && data.rates) {
+      state.rates = { base: "EUR", date: data.time_last_update_utc || new Date().toISOString(), map: { EUR: 1, ...data.rates }, source: "live" };
+      upgradeFallbackExpenses();
+      saveState();
+      /* Never re-render a form the user is filling in — rates arriving in the
+         background would wipe the uncontrolled inputs (trip name, budget,
+         dates, destination list). On the add screen just refresh the
+         converted-amount line in place. */
+      if (FORM_VIEWS.includes(state.ui.view)) {
+        const disp = $(".amount-display");
+        if (disp && state.ui.view === "add") disp.innerHTML = amountDisplayHTML();
+      } else {
+        render();
+      }
+    }
+  } catch (e) { /* offline – keep cached/fallback rates */ }
+}
+/* One-time correction: expenses converted with the bundled FALLBACK rates get
+   re-converted once real (live) rates arrive. Expenses entered with live or
+   cached-live rates stay frozen at their entry-time rate. */
+function upgradeFallbackExpenses() {
+  let n = 0;
+  for (const t of state.trips) for (const e of (t.expenses || [])) {
+    if (e.rateSource === "fallback" && e.currency !== state.homeCurrency) {
+      e.amountHome = Math.round(toHome(e.amount, e.currency) * 100) / 100;
+      e.rate = Math.round((rateFor(state.homeCurrency) / (rateFor(e.currency) || 1)) * 10000) / 10000;
+      e.rateSource = "live";
+      n++;
+    }
+  }
+  if (n) toast(n + (n === 1 ? " Eintrag" : " Einträge") + " mit aktuellem Kurs neu berechnet");
+}
+
+/* ---------------- Trip stats ---------------- */
+function tripExpenses(trip) { return (trip.expenses || []).slice().sort((a, b) => (b.date + (b.ts || "")).localeCompare(a.date + (a.ts || ""))); }
+function tripTotal(trip) { return (trip.expenses || []).reduce((s, e) => s + e.amountHome, 0); }
+function tripTravelers(trip) { return trip && Array.isArray(trip.travelers) && trip.travelers.length ? trip.travelers : ["Ich"]; }
+function tripCountries(trip) { return trip && Array.isArray(trip.countries) ? trip.countries : []; }
+function tripStart(trip) {
+  return trip.startDate || ((trip.expenses || []).length ? trip.expenses.map(e => e.date).sort()[0] : todayISO());
+}
+/* End of the window a trip is measured over: the trip end for finished trips,
+   today for running ones, and the full planned end for trips still ahead
+   (so an advance booking cannot squeeze the window down to a single day). */
+function tripWindowEnd(trip) {
+  const start = tripStart(trip), today = todayISO();
+  if (trip.endDate) return (trip.endDate < today || today < start) ? trip.endDate : today;
+  return today < start ? start : today;
+}
+function tripDays(trip) {
+  const start = tripStart(trip);
+  const end = tripWindowEnd(trip);
+  const from = new Date(start), to = new Date(end < start ? start : end);
+  return Math.max(1, Math.round((to - from) / 86400000) + 1);
+}
+function tripStarted(trip) { return !trip.startDate || todayISO() >= trip.startDate; }
+/* Days of the trip already lived through — 0 before departure. */
+function tripElapsedDays(trip) { return tripStarted(trip) ? tripDays(trip) : 0; }
+/* Anything paid before departure (flights, rental car …): counts towards the
+   budget, but is kept apart from what is actually spent on location. */
+function tripPreTotal(trip) {
+  if (!trip.startDate) return 0;
+  return (trip.expenses || []).filter(e => e.date < trip.startDate).reduce((s, e) => s + e.amountHome, 0);
+}
+function byCategory(trip) {
+  const m = {};
+  for (const e of trip.expenses || []) m[e.category] = (m[e.category] || 0) + e.amountHome;
+  return Object.entries(m).sort((a, b) => b[1] - a[1]);
+}
+/* Per-country sums for multi-destination trips; "—" = no country recorded. */
+function byCountry(trip) {
+  const m = {};
+  for (const e of trip.expenses || []) { const k = e.country || "—"; m[k] = (m[k] || 0) + e.amountHome; }
+  return Object.entries(m).sort((a, b) => b[1] - a[1]);
+}
+function byPayer(trip) {
+  const m = {};
+  for (const e of trip.expenses || []) { const p = e.payer || tripTravelers(trip)[0]; m[p] = (m[p] || 0) + e.amountHome; }
+  return m;
+}
+/* Daily-sum series for the dashboard chart.
+   mode "trip" (default): whole trip — from start (or first expense, whichever
+   is earlier) to trip end / today; capped at 92 bars for very long trips.
+   mode "14": the old rolling last-14-days window (only useful mid-trip). */
+function sparkDays(trip, mode) {
+  const days = [];
+  let from, to;
+  if (mode === "14") {
+    to = new Date(); from = new Date(); from.setDate(from.getDate() - 13);
+  } else {
+    /* Only the trip window itself — advance bookings would otherwise stretch
+       the chart over months of empty days. They get one leading bar instead. */
+    const pre = tripPreTotal(trip);
+    if (pre > 0) days.push({ iso: "pre", sum: pre, label: "vor", pretty: "vorab gebucht" });
+    const startIso = tripStart(trip);
+    const endIso = tripWindowEnd(trip);
+    from = new Date(startIso); to = new Date(endIso < startIso ? startIso : endIso);
+    if ((to - from) / 86400000 > 91) { from = new Date(to); from.setDate(from.getDate() - 91); }
+  }
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+    const iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    const sum = (trip.expenses || []).filter(e => e.date === iso).reduce((s, e) => s + e.amountHome, 0);
+    days.push({ iso, sum, label: d.getDate(), pretty: d.toLocaleDateString("de-DE", { day: "numeric", month: "short" }) });
+  }
+  return days;
+}
+
+/* Budget warnings: toast once when spending crosses 75% / 90% / 100% of the
+   trip budget. trip.budgetWarned stores the current bracket, so dropping
+   below (delete, budget raised) re-arms the warning for the next crossing. */
+function checkBudgetWarning(trip) {
+  if (!trip) return;
+  const b = trip.budget || 0;
+  const p = b > 0 ? tripTotal(trip) / b * 100 : 0;
+  const lvl = p >= 100 ? 100 : p >= 90 ? 90 : p >= 75 ? 75 : 0;
+  if (lvl > (trip.budgetWarned || 0))
+    toast(lvl >= 100 ? "⚠️ Budget überschritten!" : `⚠️ ${lvl} % des Budgets verbraucht`);
+  trip.budgetWarned = lvl;
+}
+
+/* ---------------- CSV / Backup export ---------------- */
+function csvEscape(v) { v = String(v ?? ""); return /[";\n,]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+
+function buildCSV(trips, germanExcel) {
+  const sep = germanExcel ? ";" : ",";
+  const num = (n) => germanExcel ? String(n.toFixed(2)).replace(".", ",") : n.toFixed(2);
+  const head = ["Datum", "Zeitstempel", "Reise", "Land", "Beschreibung", "Kategorie", "Betrag", "Währung", "Betrag (" + state.homeCurrency + ")", "Kurs", "Bezahlt von", "Notiz"];
+  const rows = [head.join(sep)];
+  for (const t of trips) {
+    for (const e of (t.expenses || []).slice().sort((a, b) => a.date.localeCompare(b.date))) {
+      rows.push([
+        e.date, e.ts || "", csvEscape(t.name), csvEscape(e.country || ""), csvEscape(e.note || catById(e.category).name), csvEscape(catById(e.category).name),
+        num(e.amount), e.currency, num(e.amountHome),
+        germanExcel ? String((e.rate || 1).toFixed(4)).replace(".", ",") : (e.rate || 1).toFixed(4),
+        csvEscape(e.payer || ""), csvEscape(e.note || ""),
+      ].join(sep));
+    }
+  }
+  return rows.join("\r\n");
+}
+
+async function downloadText(filename, text, mime) {
+  const blob = new Blob(["﻿" + text], { type: (mime || "text/csv") + ";charset=utf-8" });
+  const file = new File([blob], filename, { type: mime || "text/csv" });
+  /* Prefer native share sheet on mobile (iOS Safari can't always download) */
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    /* false = user cancelled the share sheet (backup reminder must not count that) */
+    try { await navigator.share({ files: [file], title: filename }); return true; } catch (e) { if (e.name === "AbortError") return false; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
+  return true;
+}
+
+function exportCSV(scope, germanExcel) {
+  const trips = scope === "all" ? state.trips : [activeTrip()].filter(Boolean);
+  if (!trips.length || trips.every(t => !(t.expenses || []).length)) { toast("Keine Ausgaben zum Exportieren"); return; }
+  const name = (scope === "all" ? "tallyaway-alle-reisen" : "tallyaway-" + slug(trips[0].name)) + "-" + todayISO() + ".csv";
+  downloadText(name, buildCSV(trips, germanExcel));
+}
+/* Summary CSV: trip facts + per-category / per-day / per-person breakdowns.
+   Same German-Excel conventions as buildCSV (semicolon, decimal comma, BOM). */
+function buildSummaryCSV(trip, germanExcel) {
+  const sep = germanExcel ? ";" : ",";
+  const num = (n) => germanExcel ? n.toFixed(2).replace(".", ",") : n.toFixed(2);
+  const total = tripTotal(trip);
+  const days = tripDays(trip);
+  const rows = [];
+  rows.push(["Reise", csvEscape(trip.name)].join(sep));
+  if (tripCountries(trip).length) rows.push(["Reiseziel", csvEscape(tripCountries(trip).map(c => c.name).join(", "))].join(sep));
+  rows.push(["Zeitraum", (trip.startDate || "") + " bis " + (trip.endDate || "heute")].join(sep));
+  rows.push(["Reisetage", days].join(sep));
+  rows.push(["Anzahl Ausgaben", (trip.expenses || []).length].join(sep));
+  if (trip.budget > 0) {
+    rows.push(["Budget (" + state.homeCurrency + ")", num(trip.budget)].join(sep));
+    rows.push(["Restbudget (" + state.homeCurrency + ")", num(trip.budget - total)].join(sep));
+  }
+  rows.push(["Gesamtausgaben (" + state.homeCurrency + ")", num(total)].join(sep));
+  const pre = tripPreTotal(trip);
+  if (pre > 0) {
+    rows.push(["davon vorab gebucht (" + state.homeCurrency + ")", num(pre)].join(sep));
+    rows.push(["davon vor Ort ausgegeben (" + state.homeCurrency + ")", num(total - pre)].join(sep));
+  }
+  rows.push(["Durchschnitt pro Tag vor Ort (" + state.homeCurrency + ")", num((total - pre) / days)].join(sep));
+  rows.push("", ["Kategorie", "Betrag (" + state.homeCurrency + ")", "Anteil %"].join(sep));
+  for (const [cid, sum] of byCategory(trip))
+    rows.push([csvEscape(catById(cid).name), num(sum), num(total ? sum / total * 100 : 0)].join(sep));
+  if (tripCountries(trip).length > 1 && byCountry(trip).some(([k]) => k !== "—")) {
+    rows.push("", ["Land", "Betrag (" + state.homeCurrency + ")", "Anteil %"].join(sep));
+    for (const [n, sum] of byCountry(trip))
+      rows.push([csvEscape(n === "—" ? "ohne Angabe" : n), num(sum), num(total ? sum / total * 100 : 0)].join(sep));
+  }
+  const perDay = {};
+  for (const e of trip.expenses || []) perDay[e.date] = (perDay[e.date] || 0) + e.amountHome;
+  rows.push("", ["Datum", "Betrag (" + state.homeCurrency + ")"].join(sep));
+  for (const d of Object.keys(perDay).sort()) rows.push([d, num(perDay[d])].join(sep));
+  const travelers = tripTravelers(trip);
+  if (travelers.length > 1) {
+    const payers = byPayer(trip);
+    const fair = total / travelers.length;
+    rows.push("", ["Person", "Bezahlt (" + state.homeCurrency + ")", "Differenz zur Gleichverteilung"].join(sep));
+    for (const p of travelers) rows.push([csvEscape(p), num(payers[p] || 0), num((payers[p] || 0) - fair)].join(sep));
+  }
+  return rows.join("\r\n");
+}
+function exportSummary() {
+  const trip = activeTrip();
+  if (!trip || !(trip.expenses || []).length) { toast("Keine Ausgaben zum Exportieren"); return; }
+  downloadText("tallyaway-" + slug(trip.name) + "-zusammenfassung-" + todayISO() + ".csv", buildSummaryCSV(trip, true));
+}
+
+async function exportBackup() {
+  /* stamp first so the backup file itself records when it was made; only
+     persist the stamp when the share was not cancelled */
+  const stamp = new Date().toISOString();
+  const snapshot = { ...state, lastBackupAt: stamp };
+  const ok = await downloadText("tallyaway-backup-" + todayISO() + ".json", JSON.stringify(snapshot, null, 2), "application/json");
+  if (ok) {
+    state.lastBackupAt = stamp;
+    state.backupSnoozedUntil = null;
+    saveState();
+    if (!FORM_VIEWS.includes(state.ui.view)) render(); /* hide the reminder card */
+  }
+}
+
+/* Backup reminder: shows on the dashboard when there are entries a backup
+   does not cover — after 14 days with an old backup, after 3 days without any. */
+function backupDue() {
+  const exps = state.trips.flatMap(t => t.expenses || []);
+  if (!exps.length) return false;
+  if (state.backupSnoozedUntil && new Date().toISOString() < state.backupSnoozedUntil) return false;
+  if (state.lastBackupAt) {
+    const newest = exps.reduce((m, e) => ((e.ts || "") > m ? e.ts : m), "");
+    return newest > state.lastBackupAt && (Date.now() - new Date(state.lastBackupAt)) / 864e5 >= 14;
+  }
+  const oldest = exps.reduce((m, e) => (e.ts && e.ts < m ? e.ts : m), "9999");
+  return (Date.now() - new Date(oldest)) / 864e5 >= 3;
+}
+function snoozeBackup() {
+  const d = new Date(); d.setDate(d.getDate() + 7);
+  state.backupSnoozedUntil = d.toISOString();
+  saveState(); render();
+}
+
+/* ----- Cloud backup (Google Drive via the owner's private Apps Script) ----- */
+function cloudCfg() {
+  try { return JSON.parse(localStorage.getItem(CLOUD_KEY) || "{}") || {}; } catch { return {}; }
+}
+function setCloudCfg(patch) {
+  try { localStorage.setItem(CLOUD_KEY, JSON.stringify({ ...cloudCfg(), ...patch })); } catch (e) { /* quota */ }
+}
+function setCloudUrl(v) {
+  v = (v || "").trim();
+  if (v && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) {
+    toast("Adresse prüfen: sie beginnt mit script.google.com und endet auf /exec");
+    return;
+  }
+  setCloudCfg({ url: v || null });
+  toast(v ? "Cloud-Backup eingerichtet ✓" : "Cloud-Backup entfernt");
+  render();
+}
+/* POST as text/plain: a "simple request" needs no CORS preflight, which the
+   Apps Script endpoint could not answer. */
+async function cloudUpload(manual) {
+  const cfg = cloudCfg();
+  if (!cfg.url) { if (manual) toast("Keine Cloud-Adresse eingetragen"); return; }
+  if (navigator.onLine === false) { if (manual) toast("Offline – später erneut versuchen"); return; }
+  const stamp = new Date().toISOString();
+  try {
+    const res = await fetch(cfg.url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ ...state, lastBackupAt: stamp }),
+    });
+    const out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) throw new Error((out && out.error) || res.status);
+    setCloudCfg({ lastAt: stamp });
+    state.lastBackupAt = stamp; /* a cloud backup counts for the reminder too */
+    state.backupSnoozedUntil = null;
+    saveState();
+    if (manual) toast("In Google Drive gesichert ✓");
+    if (!FORM_VIEWS.includes(state.ui.view)) render();
+  } catch (e) {
+    if (manual) toast("Cloud-Sicherung fehlgeschlagen – Adresse/Verbindung prüfen");
+  }
+}
+function cloudBackupNow() { toast("Sichere in die Cloud…"); cloudUpload(true); }
+/* On boot: upload silently when the cloud copy is behind the local data. */
+function autoCloudBackup() {
+  const cfg = cloudCfg();
+  if (!cfg.url) return;
+  const exps = state.trips.flatMap(t => t.expenses || []);
+  const newest = exps.reduce((m, e) => ((e.ts || "") > m ? e.ts : m), "");
+  if (newest && (!cfg.lastAt || newest > cfg.lastAt)) cloudUpload(false);
+}
+function slug(s) { return s.toLowerCase().replace(/[^a-z0-9äöüß]+/g, "-").replace(/^-|-$/g, ""); }
+
+let pendingImport = null; /* parsed backup awaiting the replace/merge choice */
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const s = JSON.parse(reader.result);
+      if (!s || !Array.isArray(s.trips)) throw new Error("bad format");
+      if (!state.trips.length) { applyImport(s, "replace"); return; }
+      pendingImport = s;
+      openImportSheet(s);
+    } catch { toast("Ungültige Backup-Datei"); }
+  };
+  reader.readAsText(file);
+}
+function openImportSheet(s) {
+  const n = s.trips.length;
+  $("#sheetHost").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this){pendingImport=null;closeSheet();}">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="h2">Backup einspielen (${n} ${n === 1 ? "Reise" : "Reisen"})</div>
+      <p class="muted" style="margin-bottom:14px; line-height:1.5;">„Hinzufügen" behält alles auf diesem Gerät und ergänzt die Reisen aus dem Backup (schon vorhandene werden übersprungen). „Ersetzen" löscht vorher alle Daten auf diesem Gerät.</p>
+      <div style="display:grid; gap:8px;">
+        <button class="btn secondary" onclick="applyImport(pendingImport,'merge')">Reisen hinzufügen</button>
+        <button class="btn danger" onclick="applyImport(pendingImport,'replace')">Alles ersetzen</button>
+        <button class="btn ghost" onclick="pendingImport=null;closeSheet()">Abbrechen</button>
+      </div>
+    </div>
+  </div>`;
+}
+function applyImport(s, mode) {
+  pendingImport = null; closeSheet();
+  const imp = migrateState({ ...defaultState(), ...s, ui: { view: "home" } });
+  if (mode === "replace") {
+    state = imp;
+    saveState(); render(); toast("Backup wiederhergestellt ✓");
+    return;
+  }
+  let added = 0, skipped = 0;
+  for (const t of imp.trips) {
+    if (state.trips.some(x => x.id === t.id)) { skipped++; continue; }
+    /* the backup may come from a device with another home currency —
+       re-derive home amounts so totals stay consistent on this one */
+    if (imp.homeCurrency !== state.homeCurrency) {
+      for (const e of (t.expenses || [])) {
+        e.amountHome = Math.round(toHome(e.amount, e.currency) * 100) / 100;
+        e.rate = e.currency === state.homeCurrency ? 1 : Math.round((rateFor(state.homeCurrency) / (rateFor(e.currency) || 1)) * 10000) / 10000;
+      }
+    }
+    state.trips.push(t); added++;
+  }
+  if (!state.activeTripId && state.trips.length) state.activeTripId = state.trips[0].id;
+  saveState(); render();
+  toast(added + (added === 1 ? " Reise" : " Reisen") + " hinzugefügt" + (skipped ? ", " + skipped + " schon vorhanden" : "") + " ✓");
+}
+
+/* ---------------- Views ---------------- */
+let lastRenderedView = null;
+function render() {
+  const view = state.ui.view;
+  const app = $("#app");
+  /* no trips yet: force the welcome screen — except for trip creation and
+     the settings (a fresh install must reach Backup wiederherstellen!) */
+  if (!state.trips.length && view !== "add-trip" && view !== "more") { app.innerHTML = viewWelcome(); renderNav(); return; }
+  switch (view) {
+    case "home": app.innerHTML = viewHome(); break;
+    case "expenses": app.innerHTML = viewExpenses(); break;
+    case "add": app.innerHTML = viewAdd(); break;
+    case "trips": app.innerHTML = viewTrips(); break;
+    case "stats": app.innerHTML = viewStats(); break;
+    case "trip-edit": app.innerHTML = viewTripEdit(); break;
+    case "add-trip": app.innerHTML = viewAddTrip(); break;
+    case "more": app.innerHTML = viewMore(); break;
+    default: app.innerHTML = viewHome();
+  }
+  renderNav();
+  /* ongoing trip: start the scrollable chart at "today" (right end) */
+  const sp = $('.spark.scroll[data-end]');
+  if (sp) sp.scrollLeft = sp.scrollWidth;
+  /* jump to top only on a view change — re-renders within a view (keypad,
+     chips) must keep the scroll position, or the phone scrolls away from
+     the keypad on every tap. The keypad itself floats fixed above the nav
+     (.keypad-wrap), so it is usable without any scrolling. */
+  if (view !== lastRenderedView) window.scrollTo(0, 0);
+  lastRenderedView = view;
+}
+/* Cross-view jumps (dashboard row → filtered list, stats/trips row → trip
+   dashboard) pass their origin as `back`, which puts a ‹ button in the target
+   topbar. Plain go() — nav taps included — clears it: tab switches are not
+   drill-ins and get no back button. One level only, no deep stack. */
+let backTo = null;
+function go(view, back) { backTo = back || null; state.ui.view = view; saveUi(); render(); }
+function goBack() { const t = backTo; backTo = null; go(t || "home"); }
+function backBtnHTML() { return backTo ? `<button class="icon-btn" onclick="goBack()" aria-label="Zurück" style="font-size:22px;">‹</button>` : ""; }
+/* Settings gear: remember which view it was opened from, so its ‹ Zurück
+   returns there instead of always landing on the dashboard. */
+function openSettings() { go("more", state.ui.view); }
+function setSparkMode(m) { state.ui.sparkMode = m; render(); } /* transient, not persisted */
+
+function renderNav() {
+  const v = state.ui.view;
+  /* order per owner decision: Reisen · Statistik · [+] · Übersicht · Ausgaben */
+  $("#navInner").innerHTML = `
+    <button class="nav-btn ${v === "trips" || v === "add-trip" || v === "trip-edit" ? "on" : ""}" onclick="go('trips')"><span class="i">🌍</span>Reisen</button>
+    <button class="nav-btn ${v === "stats" ? "on" : ""}" onclick="go('stats')"><span class="i">📈</span>Statistik</button>
+    <button class="fab" onclick="startAdd()">+</button>
+    <button class="nav-btn ${v === "home" ? "on" : ""}" onclick="go('home')"><span class="i">📊</span>Übersicht</button>
+    <button class="nav-btn ${v === "expenses" ? "on" : ""}" onclick="go('expenses')"><span class="i">🧾</span>Ausgaben</button>`;
+  /* "Mehr" (export, backup, theme, home currency) lives in the ⚙️ topbar
+     button — rarely used, so it does not need a permanent nav slot */
+}
+
+/* ----- Welcome (no trips yet) ----- */
+function viewWelcome() {
+  return `
+  <div class="topbar"><div class="title">TallyAway</div><button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button></div>
+  <div class="card" style="text-align:center; padding:36px 22px;">
+    <div style="font-size:52px; margin-bottom:12px;">🌍</div>
+    <div class="h1" style="margin-bottom:8px;">Willkommen!</div>
+    <p class="muted" style="margin-bottom:22px; line-height:1.5;">Erfasse Reiseausgaben in Sekunden – offline, mit automatischer Währungsumrechnung und CSV-Export für deine Auswertungen.</p>
+    <button class="btn" onclick="go('add-trip')">Erste Reise anlegen</button>
+    <p class="muted" style="margin-top:14px;">Schon Daten gesichert? Über ⚙️ oben rechts kannst du ein Backup wiederherstellen.</p>
+  </div>`;
+}
+
+/* ----- Home / dashboard ----- */
+function viewHome() {
+  const trip = activeTrip();
+  if (!trip) return viewWelcome();
+  const total = tripTotal(trip);
+  const preTotal = tripPreTotal(trip);      /* booked before departure */
+  const onTrip = total - preTotal;          /* actually spent on location */
+  const elapsed = tripElapsedDays(trip);    /* 0 while the trip is still ahead */
+  const budget = trip.budget || 0;
+  const pct = budget > 0 ? Math.min(1, total / budget) : 0;
+  const left = budget - total;
+  const over = budget > 0 && left < 0;
+  const r = 58, circ = 2 * Math.PI * r;
+  const todaySum = (trip.expenses || []).filter(e => e.date === todayISO()).reduce((s, e) => s + e.amountHome, 0);
+  const cats = byCategory(trip);
+  const maxCat = cats.length ? cats[0][1] : 1;
+  /* the 14-day window only helps while a LONG trip is running (quick "recent
+     days" view); for short or past trips it is confusing noise — hide it */
+  const ongoing = tripStarted(trip) && (!trip.endDate || trip.endDate >= todayISO());
+  const tripSpark = sparkDays(trip, "trip");
+  const showSparkToggle = ongoing && tripSpark.length > 20;
+  const sparkMode = showSparkToggle && state.ui.sparkMode === "14" ? "14" : "trip";
+  const spark = sparkMode === "14" ? sparkDays(trip, "14") : tripSpark;
+  const maxSpark = Math.max(1, ...spark.map(d => d.sum));
+  const sparkSub = (() => {
+    const real = spark.filter(d => d.iso !== "pre");
+    if (!real.length) return "";
+    if (sparkMode === "14") return "Letzte 14 Kalendertage";
+    const f = real[0].iso, l = real[real.length - 1].iso;
+    const D = (iso, withYear) => { const [y, m, dd] = iso.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("de-DE", { day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}) }); };
+    const curY = todayISO().slice(0, 4);
+    const sameMonth = f.slice(0, 7) === l.slice(0, 7);
+    const range = (sameMonth ? Number(f.slice(8)) + "." : D(f, f.slice(0, 4) !== l.slice(0, 4)))
+      + "–" + D(l, f.slice(0, 4) !== curY || l.slice(0, 4) !== curY);
+    return "Reisezeitraum: " + range + " · " + real.length + (real.length === 1 ? " Tag" : " Tage");
+  })();
+  const payers = byPayer(trip);
+  const travelers = tripTravelers(trip);
+  const showSplit = travelers.length > 1 && (trip.expenses || []).length > 0;
+
+  return `
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:10px; min-width:0;">${backBtnHTML()}<div class="title">Übersicht</div></div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
+      <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
+    </div>
+  </div>
+
+  ${backupDue() ? `<div class="card" style="display:flex; align-items:center; gap:12px; padding:14px 16px;">
+    <div style="font-size:22px; flex:none;">💾</div>
+    <div style="flex:1;" class="muted">${state.lastBackupAt ? "Dein letztes Backup ist über 2 Wochen her." : "Noch kein Backup erstellt."} Sichere deine Daten.</div>
+    <button class="btn secondary" style="width:auto; padding:10px 14px; font-size:13px; flex:none;" onclick="exportBackup()">Backup</button>
+    <button class="btn ghost" style="width:auto; padding:10px 4px; font-size:13px; flex:none;" onclick="snoozeBackup()">Später</button>
+  </div>` : ""}
+
+  <div class="card">
+    <div class="ring-wrap">
+      <div class="ring">
+        <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="Budgetauslastung">
+          <circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--bg)" stroke-width="11"/>
+          <circle cx="66" cy="66" r="${r}" fill="none" stroke="${over ? "var(--danger)" : budget > 0 && pct >= 0.9 ? "var(--warn)" : "var(--accent)"}" stroke-width="11"
+            stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - (budget > 0 ? pct : (total > 0 ? 1 : 0)))}"/>
+        </svg>
+        <div class="center">
+          <div class="big">${fmtShort(total)}</div>
+          <div class="sub">${budget > 0 ? "von " + fmtShort(budget) : "ausgegeben"}</div>
+        </div>
+      </div>
+      <div class="kpis">
+        ${budget > 0 ? `<div class="kpi"><div class="v ${over ? "warn" : ""}">${over ? "+" + fmt(-left) : fmt(left)}</div><div class="l">${over ? "über Budget" : "übrig"}</div></div>` : ""}
+        ${elapsed === 0
+          ? (() => {
+              const toStart = Math.round((new Date(trip.startDate) - new Date(todayISO())) / 86400000);
+              return `<div class="kpi"><div class="v">in ${toStart} ${toStart === 1 ? "Tag" : "Tagen"}</div><div class="l">Reisebeginn ${new Date(trip.startDate).toLocaleDateString("de-DE", { day: "numeric", month: "short" })}</div></div>`;
+            })()
+          : `<div class="kpi"><div class="v">${fmt(onTrip / elapsed)}</div><div class="l">Ø pro Tag vor Ort (${elapsed} ${elapsed === 1 ? "Tag" : "Tage"})</div></div>`}
+        ${preTotal > 0 ? `<div class="kpi"><div class="v">${fmt(preTotal)}</div><div class="l">vorab gebucht (${Math.round(preTotal / total * 100)} % der Kosten)</div></div>` : ""}
+        <div class="kpi"><div class="v">${fmt(todaySum)}</div><div class="l">heute</div></div>
+        ${(trip.expenses || []).length ? (() => {
+          const maxExp = trip.expenses.reduce((a, e) => e.amountHome > a.amountHome ? e : a);
+          const topCat = cats.length ? catById(cats[0][0]) : null;
+          return `<div class="kpi"><div class="v">${fmtShort(maxExp.amountHome)}</div><div class="l">größte Einzelausgabe</div></div>` +
+            (topCat ? `<div class="kpi"><div class="v">${fmtShort(cats[0][1])}</div><div class="l">${topCat.icon} ${esc(topCat.name)} (größte Kategorie)</div></div>` : "");
+        })() : ""}
+        ${(() => {
+          if (!trip.endDate || elapsed === 0) return ""; /* before departure the countdown above says it */
+          const daysLeft = Math.round((new Date(trip.endDate) - new Date(todayISO())) / 86400000);
+          if (daysLeft < 0) return "";
+          const perDayLeft = budget > 0 && left > 0 && daysLeft > 0 ? " · Ø " + fmtShort(left / daysLeft) + "/Tag möglich" : "";
+          return `<div class="kpi"><div class="v">${daysLeft === 0 ? "letzter Tag" : "noch " + daysLeft + (daysLeft === 1 ? " Tag" : " Tage")}</div><div class="l">bis ${new Date(trip.endDate).toLocaleDateString("de-DE", { day: "numeric", month: "short" })}${perDayLeft}</div></div>`;
+        })()}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <div class="h2" style="margin:0;">Ausgaben-Verlauf</div>
+      ${showSparkToggle ? `<div style="display:flex; gap:6px;">
+        <button class="chip ${sparkMode === "trip" ? "on" : ""}" style="padding:6px 12px; font-size:12px;" onclick="setSparkMode('trip')">ganze Reise</button>
+        <button class="chip ${sparkMode === "14" ? "on" : ""}" style="padding:6px 12px; font-size:12px;" onclick="setSparkMode('14')">letzte 14 Tage</button>
+      </div>` : ""}
+    </div>
+    ${sparkSub ? `<div class="muted" style="font-size:11.5px; margin-top:3px;">${sparkSub}</div>` : ""}
+    <div class="spark ${spark.length > 20 ? "scroll" : ""}" ${spark.length > 20 && spark[spark.length - 1].iso === todayISO() ? 'data-end="1"' : ""}>
+      ${spark.map(d => `<div class="col ${d.iso === todayISO() ? "today" : ""} ${d.iso === "pre" ? "pre" : ""}" onclick="toast('${d.pretty}: ${fmtShort(d.sum)}')"><div class="bar" style="height:${Math.round(d.sum / maxSpark * 58)}px"></div><div class="d">${d.label}</div></div>`).join("")}
+    </div>
+    ${spark.length > 20 ? '<div class="muted" style="font-size:11px; text-align:center; margin-top:6px;">← wischen · Balken antippen für Details</div>' : ""}
+  </div>
+
+  ${cats.length ? `<div class="card">
+    <div class="h2">Nach Kategorie</div>
+    ${cats.map(([cid, sum]) => {
+      const c = catById(cid);
+      return `<div class="cat-row" onclick="goFiltered('${cid}', null)" style="cursor:pointer;">
+        <div class="cat-ico">${c.icon}</div>
+        <div class="cat-mid"><div class="cat-name">${esc(c.name)} <span class="muted" style="font-weight:400;">· ${total ? Math.round(sum / total * 100) : 0} %</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%"></div></div></div>
+        <div class="cat-amt">${fmtShort(sum)}</div></div>`;
+    }).join("")}
+    <div class="muted" style="margin-top:8px;">Antippen öffnet die gefilterte Ausgabenliste.</div>
+  </div>` : `<div class="card empty"><div class="e">🧾</div>Noch keine Ausgaben.<br>Tippe auf <b>+</b>, um die erste zu erfassen.</div>`}
+
+  ${(() => {
+    /* multi-destination trips: where did the money go, by country */
+    if (tripCountries(trip).length < 2) return "";
+    const rows = byCountry(trip);
+    if (!rows.some(([k]) => k !== "—")) return "";
+    const maxC = rows.length ? rows[0][1] : 1;
+    return `<div class="card"><div class="h2">Nach Land</div>` + rows.map(([n, sum]) => `<div class="cat-row" ${n !== "—" ? `onclick="goFiltered(null, '${esc(n)}')" style="cursor:pointer;"` : ""}>
+      <div class="cat-mid"><div class="cat-name">${esc(n === "—" ? "ohne Angabe" : n)} <span class="muted" style="font-weight:400;">· ${total ? Math.round(sum / total * 100) : 0} %</span></div>
+        <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxC * 100))}%"></div></div></div>
+      <div class="cat-amt">${fmtShort(sum)}</div></div>`).join("") + `<div class="muted" style="margin-top:8px;">Antippen öffnet die gefilterte Ausgabenliste.</div></div>`;
+  })()}
+
+  ${showSplit ? `<div class="card">
+    <div class="h2">Wer hat bezahlt?</div>
+    ${travelers.map(p => {
+      const paid = payers[p] || 0;
+      const fair = total / travelers.length;
+      const diff = paid - fair;
+      return `<div class="list-item"><div><b>${esc(p)}</b><div class="muted">${diff >= 0 ? "bekommt " + fmt(diff) : "schuldet " + fmt(-diff)}</div></div><div style="font-weight:750">${fmt(paid)}</div></div>`;
+    }).join("")}
+    <div class="muted" style="margin-top:8px;">Gleichmäßige Aufteilung auf ${travelers.length} Personen.</div>
+  </div>` : ""}
+
+  <div class="offline-note">Kurse: ${state.rates.source === "live" ? "aktuell (" + esc(String(state.rates.date).slice(0, 16)) + ")" : "Offline-Fallback"} · Daten nur auf diesem Gerät</div>`;
+}
+
+/* ----- Expense list ----- */
+let expFilter = { q: "", cat: null, country: null }; /* transient; reset on trip switch */
+function expenseMatches(e) {
+  if (expFilter.cat && e.category !== expFilter.cat) return false;
+  if (expFilter.country && (e.country || null) !== expFilter.country) return false;
+  const q = expFilter.q.trim().toLowerCase();
+  if (!q) return true;
+  return (e.note || "").toLowerCase().includes(q)
+    || catById(e.category).name.toLowerCase().includes(q)
+    || (e.payer || "").toLowerCase().includes(q);
+}
+function expListHTML(trip) {
+  const exps = tripExpenses(trip).filter(expenseMatches);
+  if (!exps.length) return `<div class="card empty"><div class="e">🔍</div>Keine Treffer.</div>`;
+  const groups = {};
+  for (const e of exps) (groups[e.date] = groups[e.date] || []).push(e);
+  const dates = Object.keys(groups).sort().reverse();
+  return dates.map(d => {
+    const daySum = groups[d].reduce((s, e) => s + e.amountHome, 0);
+    return `<div class="day-head"><span>${dateLabel(d)}</span><span>${fmtShort(daySum)}</span></div>` +
+      groups[d].map(e => {
+        const c = catById(e.category);
+        return `<div class="exp" onclick="editExpense('${e.id}')">
+          <div class="cat-ico">${c.icon}</div>
+          <div class="info"><div class="t">${esc(e.note || c.name)}</div>
+            ${(() => { const sub = [e.note ? c.name : null, tripTravelers(trip).length > 1 ? e.payer : null].filter(Boolean).join(" · "); return sub ? `<div class="s">${esc(sub)}</div>` : ""; })()}</div>
+          <div class="amts"><div class="home">${fmt(e.amountHome)}</div>
+            ${e.currency !== state.homeCurrency ? `<div class="orig">${fmt(e.amount, e.currency)}</div>` : ""}</div>
+        </div>`;
+      }).join("");
+  }).join("");
+}
+function filterExp(v) {
+  /* patch only the list — a full render() would steal focus from the input */
+  expFilter.q = v;
+  const el = $("#expList");
+  if (el) el.innerHTML = expListHTML(activeTrip());
+}
+function setExpCat(cid) { expFilter.cat = cid; render(); }
+function setExpCountry(n) { expFilter.country = n; render(); }
+/* Jump from a dashboard breakdown row into the pre-filtered expense list. */
+function goFiltered(cid, country) { expFilter = { q: "", cat: cid || null, country: country || null }; go("expenses", "home"); }
+function viewExpenses() {
+  const trip = activeTrip();
+  const exps = tripExpenses(trip);
+  const expTopbar = `<div class="topbar">
+    <div style="display:flex; align-items:center; gap:10px; min-width:0;">${backBtnHTML()}<div class="title">Ausgaben</div></div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
+      <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
+    </div>
+  </div>`;
+  if (!exps.length) return expTopbar + `
+    <div class="card empty"><div class="e">🧾</div>Noch keine Ausgaben in dieser Reise.</div>`;
+  return expTopbar + `
+  <input id="expSearch" type="search" value="${esc(expFilter.q)}" placeholder="Suchen (Notiz, Kategorie, Person)…"
+    autocomplete="off" oninput="filterExp(this.value)">
+  <div class="cur-row" style="padding-bottom:10px;">
+    <button class="chip ${!expFilter.cat ? "on" : ""}" onclick="setExpCat(null)">Alle</button>
+    ${byCategory(trip).map(([cid]) => { const c = catById(cid); return `<button class="chip ${expFilter.cat === cid ? "on" : ""}" onclick="setExpCat('${cid}')">${c.icon} ${esc(c.name)}</button>`; }).join("")}
+  </div>
+  ${tripCountries(trip).length > 1 ? `<div class="cur-row" style="padding-top:0; padding-bottom:10px;">
+    <button class="chip ${!expFilter.country ? "on" : ""}" onclick="setExpCountry(null)">🌍 Alle Länder</button>
+    ${tripCountries(trip).map(c => `<button class="chip ${expFilter.country === c.name ? "on" : ""}" onclick="setExpCountry('${esc(c.name)}')">${esc(c.name)}</button>`).join("")}
+  </div>` : ""}
+  <div id="expList">${expListHTML(trip)}</div>`;
+}
+
+/* ----- Add / edit expense ----- */
+function startAdd() {
+  if (!state.trips.length) { go("add-trip"); return; }
+  editingExpenseId = null;
+  keypadOpen = false; /* keypad opens on tapping the amount (owner preference) */
+  const trip = activeTrip();
+  const last = (trip.expenses || [])[trip.expenses.length - 1];
+  /* currency default: last used in this trip → trip's destination currency → home */
+  draft = {
+    amountStr: "", sign: 1,
+    currency: last ? last.currency : (trip.currency || state.homeCurrency),
+    category: null, note: "", date: todayISO(),
+    payer: last ? (last.payer || tripTravelers(trip)[0]) : tripTravelers(trip)[0],
+    country: defaultExpCountry(trip, last),
+  };
+  go("add");
+}
+/* Country default: last-used in this trip wins (border-hopping continuity),
+   otherwise the first destination. null for trips without destinations. */
+function defaultExpCountry(trip, last) {
+  const cs = tripCountries(trip);
+  if (!cs.length) return null;
+  if (last && last.country && cs.some(c => c.name === last.country)) return last.country;
+  return cs[0].name;
+}
+function editExpense(id) {
+  const trip = activeTrip();
+  const e = (trip.expenses || []).find(x => x.id === id);
+  if (!e) return;
+  editingExpenseId = id;
+  keypadOpen = false;
+  draft = { amountStr: String(Math.abs(e.amount)).replace(".", ","), sign: e.amount < 0 ? -1 : 1,
+    currency: e.currency, category: e.category, note: e.note || "", date: e.date,
+    payer: e.payer || tripTravelers(trip)[0], rate: e.rate,
+    country: e.country || null, tripId: trip.id };
+  go("add");
+}
+function draftAmount() { return parseFloat((draft.amountStr || "0").replace(",", ".")) || 0; }
+
+function amountDisplayHTML() {
+  const amt = draftAmount();
+  const sgn = draft.sign === -1 ? "−" : "";
+  const conv = draft.currency !== state.homeCurrency && amt > 0 ? "≈ " + sgn + fmt(toHome(amt, draft.currency)) : "&nbsp;";
+  return `<div class="val">${sgn}${draft.amountStr || "0"}<span style="font-size:26px;color:var(--muted);"> ${esc(draft.currency)}</span></div>
+    <div class="conv">${conv}</div>`;
+}
+function viewAdd() {
+  const trip = activeTrip();
+  /* Chips: destination currency first, then EUR + USD always, plus the
+     current selection / last-used if different. Everything else via "Alle ▾". */
+  const last = (trip.expenses || [])[trip.expenses.length - 1];
+  /* multi-destination trips: every destination's currency gets a chip */
+  const destCurs = tripCountries(trip).map(c => c.cur);
+  const curs = [...new Set([trip.currency, draft.currency, last && last.currency, ...destCurs, state.homeCurrency, "EUR", "USD"])].filter(Boolean).slice(0, 5);
+  return `
+  <div class="topbar">
+    <button class="btn ghost" style="width:auto; padding:6px 0;" onclick="cancelAdd()">Abbrechen</button>
+    <div class="h1" style="font-size:18px; white-space:nowrap;">${editingExpenseId ? "Bearbeiten" : "Neue Ausgabe"}</div>
+    <button class="btn" style="width:auto; padding:9px 16px; font-size:15px;" onclick="saveExpense()">${editingExpenseId ? "Speichern" : "Hinzufügen"}</button>
+  </div>
+
+  <div class="amount-display" onclick="toggleKeypad()">${amountDisplayHTML()}</div>
+  ${!keypadOpen && !draft.amountStr ? `<div class="muted" style="text-align:center; font-size:11.5px;">Betrag antippen zum Eintippen</div>` : ""}
+
+  <div class="refund-row">
+    <button class="chip ${draft.sign === -1 ? "on" : ""}" onclick="toggleRefund()">↩ Erstattung</button>
+  </div>
+
+  <div class="cur-row">
+    ${curs.map(c => `<button class="chip ${c === draft.currency ? "on" : ""}" onclick="setCur('${c}')">${c}</button>`).join("")}
+    <button class="chip" onclick="openCurSheet()">Alle ▾</button>
+  </div>
+
+  <div class="cat-grid">
+    ${CATEGORIES.map(c => `<button class="cat-cell ${draft.category === c.id ? "on" : ""}" onclick="setCat('${c.id}')"><div class="e">${c.icon}</div><div class="n">${esc(c.name)}</div></button>`).join("")}
+  </div>
+
+  ${tripCountries(trip).length > 1 ? `<label class="field" style="margin-bottom:6px;"><span>Land</span></label>
+  <div class="payer-row">
+    ${tripCountries(trip).map(c => `<button class="chip ${draft.country === c.name ? "on" : ""}" onclick="setDraftCountry('${esc(c.name)}')">${esc(c.name)}</button>`).join("")}
+  </div>` : ""}
+
+  ${tripTravelers(trip).length > 1 ? `<div class="payer-row">
+    ${tripTravelers(trip).map(p => `<button class="chip ${draft.payer === p ? "on" : ""}" onclick="setPayer('${esc(p)}')">${esc(p)}</button>`).join("")}
+  </div>` : ""}
+
+  <label class="field"><span>Notiz (optional)</span>
+    <input id="noteInput" value="${esc(draft.note)}" placeholder="z. B. Tacos am Strand" oninput="draft.note=this.value"></label>
+  ${editingExpenseId ? `<label class="field"><span>Datum</span>
+    <input type="date" value="${draft.date}" max="${todayISO()}" onchange="draft.date=this.value||'${todayISO()}'"></label>` : ""}
+  ${editingExpenseId && draft.currency !== state.homeCurrency ? `<label class="field"><span>Kurs (1 ${esc(draft.currency)} = ? ${esc(state.homeCurrency)})</span>
+    <input type="number" inputmode="decimal" step="0.0001" min="0" value="${draft.rate || ""}"
+      onchange="draft.rate=parseFloat(this.value)||draft.rate"></label>` : ""}
+  ${editingExpenseId && state.trips.length > 1 ? `<label class="field"><span>Reise (zum Verschieben ändern)</span>
+    <select onchange="draft.tripId=this.value">${state.trips.map(t => `<option value="${t.id}" ${t.id === draft.tripId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>` : ""}
+
+  ${editingExpenseId ? `<button class="btn danger" style="margin-top:4px;" onclick="deleteExpense()">Ausgabe löschen</button>` : ""}
+
+  ${keypadOpen ? `<div style="height:290px"></div>
+  <div class="keypad-wrap"><div class="keypad">
+    ${["1","2","3","4","5","6","7","8","9",",","0","⌫"].map(k => `<button class="key" onclick="key('${k === "⌫" ? "back" : k}', this)">${k}</button>`).join("")}
+  </div></div>` : ""}`;
+}
+let keypadOpen = false; /* fixed keypad panel; opens by tapping the amount */
+function toggleKeypad() { keypadOpen = !keypadOpen; render(); }
+function cancelAdd() {
+  const wasEditing = !!editingExpenseId;
+  editingExpenseId = null;
+  go(wasEditing ? "expenses" : "home"); /* back to where the user came from */
+}
+function key(k, el) {
+  /* visible press feedback: restart the flash animation on the tapped key
+     (works because the keypad DOM is no longer re-rendered per tap) */
+  if (el) { el.classList.remove("pressed"); void el.offsetWidth; el.classList.add("pressed"); }
+  if (navigator.vibrate) navigator.vibrate(8); /* Android only; iOS ignores it */
+  if (k === "back") draft.amountStr = draft.amountStr.slice(0, -1);
+  else if (k === ",") { if (!draft.amountStr.includes(",")) draft.amountStr = (draft.amountStr || "0") + ","; }
+  else {
+    const [, dec] = draft.amountStr.split(",");
+    if (dec !== undefined && dec.length >= 2) return;
+    if (draft.amountStr.replace(",", "").length >= 9) return;
+    draft.amountStr += k;
+  }
+  /* patch only the amount display — a full render() would reset the scroll
+     position and pull the keypad out from under the thumb */
+  const disp = $(".amount-display");
+  if (disp) disp.innerHTML = amountDisplayHTML(); else render();
+}
+function toggleRefund() { draft.sign = draft.sign === -1 ? 1 : -1; render(); }
+function setDraftCountry(n) { draft.country = n; render(); }
+function setCur(c) {
+  draft.currency = c;
+  /* multi-destination trips: a currency belonging to exactly one destination
+     also selects that country (no extra tap on border hops) */
+  const matches = tripCountries(activeTrip()).filter(x => x.cur === c);
+  if (matches.length === 1) draft.country = matches[0].name;
+  /* in edit mode keep the rate field consistent with the chosen currency:
+     original currency → its frozen rate; other currency → current live rate */
+  if (editingExpenseId) {
+    const orig = (activeTrip().expenses || []).find(x => x.id === editingExpenseId);
+    draft.rate = orig && orig.currency === c ? orig.rate
+      : (c === state.homeCurrency ? 1 : Math.round(rateFor(state.homeCurrency) / (rateFor(c) || 1) * 10000) / 10000);
+  }
+  render();
+}
+function setCat(c) { draft.category = c; render(); }
+function setPayer(p) { draft.payer = p; render(); }
+function saveExpense() {
+  const amt = draftAmount() * (draft.sign === -1 ? -1 : 1); /* refunds are negative */
+  if (draftAmount() <= 0) { toast("Bitte Betrag eingeben"); return; }
+  if (!draft.category) { toast("Bitte Kategorie wählen"); return; }
+  const trip = activeTrip();
+  let rate = draft.currency === state.homeCurrency ? 1 : (rateFor(state.homeCurrency) / (rateFor(draft.currency) || 1));
+  let rateSource = draft.currency === state.homeCurrency ? "live" : state.rates.source;
+  /* Edits keep the frozen entry rate (or the user's manual correction) —
+     a fresh live rate only applies when the currency was changed. A manual
+     correction becomes authoritative: mark it "live" so the one-time
+     fallback upgrade never overwrites it. */
+  const orig = editingExpenseId ? (trip.expenses || []).find(x => x.id === editingExpenseId) : null;
+  if (orig && orig.currency === draft.currency && draft.rate > 0) {
+    rate = draft.rate;
+    rateSource = Math.abs(rate - orig.rate) > 1e-9 ? "live" : orig.rateSource;
+  }
+  const rec = {
+    id: editingExpenseId || uid(),
+    ts: new Date().toISOString(),
+    /* new entries are always stamped "now"; the date is only editable afterwards */
+    date: editingExpenseId ? draft.date : todayISO(),
+    amount: amt,
+    currency: draft.currency,
+    amountHome: Math.round(amt * rate * 100) / 100,
+    rate: Math.round(rate * 10000) / 10000,
+    category: draft.category,
+    note: draft.note.trim(),
+    payer: draft.payer,
+    country: draft.country || null,
+    rateSource,
+  };
+  let movedTo = null;
+  if (editingExpenseId) {
+    delete rec.ts; /* keep the original creation timestamp on edits */
+    const i = trip.expenses.findIndex(x => x.id === editingExpenseId);
+    if (i >= 0) {
+      const updated = { ...trip.expenses[i], ...rec };
+      const target = draft.tripId && draft.tripId !== trip.id ? state.trips.find(t => t.id === draft.tripId) : null;
+      if (target) {
+        trip.expenses.splice(i, 1);
+        target.expenses.push(updated);
+        checkBudgetWarning(target);
+        movedTo = target.name;
+      } else {
+        trip.expenses[i] = updated;
+      }
+    }
+  } else {
+    trip.expenses.push(rec);
+  }
+  if (!state.recentCurrencies.includes(draft.currency)) { state.recentCurrencies.push(draft.currency); if (state.recentCurrencies.length > 6) state.recentCurrencies.shift(); }
+  editingExpenseId = null;
+  toast(movedTo ? "Nach „" + movedTo + "“ verschoben ✓" : fmt(rec.amountHome) + " erfasst ✓");
+  checkBudgetWarning(trip); /* after the confirmation toast — a crossing warning replaces it */
+  saveState();
+  go("home");
+}
+let lastDeleted = null; /* {tripId, exp} — kept for the undo toast */
+function deleteExpense() {
+  if (!editingExpenseId) return;
+  const trip = activeTrip();
+  const exp = (trip.expenses || []).find(x => x.id === editingExpenseId);
+  trip.expenses = trip.expenses.filter(x => x.id !== editingExpenseId);
+  lastDeleted = exp ? { tripId: trip.id, exp } : null;
+  editingExpenseId = null;
+  checkBudgetWarning(trip); /* re-arms the warning bracket after deletes */
+  saveState(); go("expenses");
+  toastAction("Gelöscht", "Rückgängig", undoDelete, 6000);
+}
+function undoDelete() {
+  if (!lastDeleted) return;
+  const trip = state.trips.find(t => t.id === lastDeleted.tripId);
+  if (trip) {
+    trip.expenses.push(lastDeleted.exp);
+    saveState(); render();
+    toast("Wiederhergestellt ✓");
+    checkBudgetWarning(trip);
+  }
+  lastDeleted = null;
+}
+
+/* ----- Trips ----- */
+function viewTrips() {
+  return `
+  <div class="topbar"><div class="title">Reisen</div><button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button></div>
+  ${state.trips.slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || "")).map(t => `
+    <div class="card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
+      <div class="row">
+        <div><div class="h2" style="margin:0;">${esc(t.name)}</div>
+          <div class="muted">${(t.expenses || []).length} Ausgaben${tripCountries(t).length ? " · " + esc(tripCountries(t).map(c => c.name).join(", ")) : ""}${t.budget ? " · Budget " + fmtShort(t.budget) : ""}</div></div>
+        <div style="text-align:right;"><div style="font-weight:800; font-size:17px;">${fmtShort(tripTotal(t))}</div>
+          <div style="display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:4px;">
+            ${t.id === state.activeTripId ? '<span class="pill">ausgewählt</span>' : ""}
+            <button class="btn ghost" style="width:auto;padding:4px 10px;" onclick="event.stopPropagation(); editTrip('${t.id}')">✎</button>
+          </div></div>
+      </div>
+    </div>`).join("")}
+  <p class="muted" style="margin:2px 4px 14px;">Neue Ausgaben landen immer in der ausgewählten Reise – zum Wechseln einfach eine andere antippen. Da passiert nichts automatisch.</p>
+  <button class="btn secondary" onclick="go('add-trip')">+ Neue Reise</button>`;
+}
+function switchTrip(id, from) { state.activeTripId = id; expFilter = { q: "", cat: null, country: null }; saveState(); go("home", from); }
+
+/* ----- Cross-trip statistics ----- */
+let statsYear = null; /* null = all years; transient */
+function setStatsYear(y) { statsYear = y; render(); }
+function viewStats() {
+  const years = [...new Set(state.trips.map(t => (t.startDate || "").slice(0, 4)).filter(Boolean))].sort().reverse();
+  const trips = state.trips.filter(t => !statsYear || (t.startDate || "").startsWith(statsYear))
+    .slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""));
+  const total = trips.reduce((s, t) => s + tripTotal(t), 0);
+  const days = trips.reduce((s, t) => s + tripDays(t), 0);
+  const nCountries = new Set(trips.flatMap(t => tripCountries(t).map(c => c.name))).size;
+  const topTrip = trips.length ? trips.reduce((a, t) => tripTotal(t) > tripTotal(a) ? t : a) : null;
+  const maxTotal = Math.max(1, ...trips.map(tripTotal));
+  const cats = {};
+  for (const t of trips) for (const e of t.expenses || []) cats[e.category] = (cats[e.category] || 0) + e.amountHome;
+  const catRows = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  const maxCat = catRows.length ? catRows[0][1] : 1;
+  return `
+  <div class="topbar"><div class="title">Statistik</div><button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button></div>
+  <div class="cur-row" style="padding-top:2px;">
+    <button class="chip ${!statsYear ? "on" : ""}" onclick="setStatsYear(null)">Alle</button>
+    ${years.map(y => `<button class="chip ${statsYear === y ? "on" : ""}" onclick="setStatsYear('${y}')">${y}</button>`).join("")}
+  </div>
+  ${trips.length ? `
+  <div class="card">
+    <div class="kpis" style="grid-template-columns:1fr 1fr;">
+      <div class="kpi"><div class="v">${fmtShort(total)}</div><div class="l">Gesamt (${trips.length} ${trips.length === 1 ? "Reise" : "Reisen"})</div></div>
+      <div class="kpi"><div class="v">${fmtShort(total / trips.length)}</div><div class="l">Ø pro Reise</div></div>
+      <div class="kpi"><div class="v">${fmtShort(days ? total / days : 0)}</div><div class="l">Ø pro Reisetag (${days} Tage)</div></div>
+      <div class="kpi"><div class="v">${nCountries}</div><div class="l">${nCountries === 1 ? "Land" : "Länder"} besucht</div></div>
+      ${topTrip ? `<div class="kpi" style="grid-column:1 / -1;"><div class="v">${fmtShort(tripTotal(topTrip))}</div><div class="l">teuerste Reise: ${esc(topTrip.name)}</div></div>` : ""}
+    </div>
+  </div>
+  <div class="card">
+    <div class="h2">Pro Reise</div>
+    ${trips.map(t => {
+      const sum = tripTotal(t);
+      const d = tripDays(t);
+      return `<div class="cat-row" onclick="switchTrip('${t.id}','stats')" style="cursor:pointer;">
+        <div class="cat-mid"><div class="cat-name">${esc(t.name)} <span class="muted" style="font-weight:400;">· ${d} ${d === 1 ? "Tag" : "Tage"} · Ø ${fmtShort(d ? sum / d : 0)}/Tag</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxTotal * 100))}%"></div></div></div>
+        <div class="cat-amt">${fmtShort(sum)}</div></div>`;
+    }).join("")}
+    <div class="muted" style="margin-top:8px;">Antippen wählt die Reise aus und öffnet ihre Übersicht.</div>
+  </div>
+  ${!statsYear && years.length > 1 ? `<div class="card">
+    <div class="h2">Pro Jahr</div>
+    ${years.map(y => {
+      const sum = state.trips.filter(t => (t.startDate || "").startsWith(y)).reduce((s, t) => s + tripTotal(t), 0);
+      return `<div class="list-item"><b>${y}</b><div style="font-weight:750">${fmtShort(sum)}</div></div>`;
+    }).join("")}
+  </div>` : ""}
+  ${catRows.length ? `<div class="card">
+    <div class="h2">Nach Kategorie</div>
+    ${catRows.map(([cid, sum]) => {
+      const c = catById(cid);
+      return `<div class="cat-row" onclick="statsCatToast('${cid}')" style="cursor:pointer;">
+        <div class="cat-ico">${c.icon}</div>
+        <div class="cat-mid"><div class="cat-name">${esc(c.name)} <span class="muted" style="font-weight:400;">· ${total ? Math.round(sum / total * 100) : 0} %</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%"></div></div></div>
+        <div class="cat-amt">${fmtShort(sum)}</div></div>`;
+    }).join("")}
+    <div class="muted" style="margin-top:8px;">Antippen zeigt Anteil und Anzahl der Einträge.</div>
+  </div>` : ""}` : `<div class="card empty"><div class="e">📈</div>Keine Reisen in diesem Zeitraum.</div>`}`;
+}
+/* Detail toast for a stats category row (same interactivity as the trip bars). */
+function statsCatToast(cid) {
+  const trips = state.trips.filter(t => !statsYear || (t.startDate || "").startsWith(statsYear));
+  let sum = 0, n = 0, total = 0;
+  for (const t of trips) for (const e of t.expenses || []) {
+    total += e.amountHome;
+    if (e.category === cid) { sum += e.amountHome; n++; }
+  }
+  toast(catById(cid).name + ": " + fmtShort(sum) + " · " + (total ? Math.round(sum / total * 100) : 0) + " % · " + n + (n === 1 ? " Eintrag" : " Einträge"));
+}
+
+/* ----- Per-trip settings ----- */
+let editingTripId = null;
+function editingTrip() { return state.trips.find(t => t.id === editingTripId) || null; }
+function editTrip(id) { editingTripId = id; go("trip-edit"); }
+function viewTripEdit() {
+  const t = editingTrip();
+  if (!t) return viewTrips();
+  const travelers = tripTravelers(t);
+  return `
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+      <button class="icon-btn" onclick="go('trips')" aria-label="Zurück" style="font-size:22px; flex:none;">‹</button>
+      <div class="title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(t.name)}</div>
+    </div>
+  </div>
+  <div class="card">
+    <label class="field"><span>Name der Reise</span>
+      <input value="${esc(t.name)}" onchange="updateTripName(this.value)"></label>
+    <label class="field"><span>Reiseziele (Währungen erscheinen als Chips bei der Eingabe)</span></label>
+    ${tripCountries(t).map((c, i) => `<div class="list-item"><b>${esc(c.name)} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeTripCountry(${i})">Entfernen</button></div>`).join("")}
+    <button class="btn ghost" onclick="openCountrySheet('edit')" style="margin-bottom:12px;">+ Reiseziel hinzufügen</button>
+    <label class="field"><span>Standard-Währung für neue Ausgaben</span>
+      <button type="button" class="select-btn" onclick="openCurSheet('trip')">${esc(t.currency || state.homeCurrency)} – ${esc(curName(t.currency || state.homeCurrency))} &nbsp;▾</button></label>
+    <label class="field"><span>Budget (${esc(state.homeCurrency)}, 0 = kein Budget)</span>
+      <input type="number" inputmode="decimal" value="${t.budget || ""}" placeholder="0" onchange="updateTripBudget(this.value)"></label>
+    <label class="field"><span>Startdatum</span>
+      <input type="date" value="${t.startDate || ""}" onchange="updateTripDate('startDate', this.value)"></label>
+    <label class="field"><span>Enddatum (optional)</span>
+      <input type="date" value="${t.endDate || ""}" onchange="updateTripDate('endDate', this.value)"></label>
+  </div>
+  <div class="card">
+    <div class="h2">👥 Reisende</div>
+    <p class="muted" style="margin-bottom:12px;">Bei mehr als einer Person kannst du bei jeder Ausgabe wählen, wer bezahlt hat – die Übersicht zeigt dann die Aufteilung.</p>
+    ${travelers.map((p, i) => `<div class="list-item"><b>${esc(p)}</b>${travelers.length > 1 ? `<button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeTraveler(${i})">Entfernen</button>` : ""}</div>`).join("")}
+    <button class="btn ghost" onclick="addTraveler()" style="margin-top:6px;">+ Person hinzufügen</button>
+  </div>
+  <div class="card">
+    <div class="h2">🗑️ Aufräumen</div>
+    <button class="btn danger" onclick="deleteTrip('${t.id}')">Reise löschen</button>
+  </div>`;
+}
+function updateTripName(v) {
+  const t = editingTrip(); if (!t) return;
+  if (!v.trim()) { toast("Name darf nicht leer sein"); render(); return; }
+  t.name = v.trim(); saveState(); render();
+}
+function updateTripBudget(v) {
+  const t = editingTrip(); if (!t) return;
+  t.budget = parseFloat(v) || 0; checkBudgetWarning(t); saveState(); render();
+}
+function updateTripDate(field, v) {
+  const t = editingTrip(); if (!t) return;
+  if (field === "endDate" && v && t.startDate && v < t.startDate) { toast("Enddatum liegt vor dem Startdatum"); render(); return; }
+  if (field === "startDate" && v && t.endDate && t.endDate < v) { toast("Startdatum liegt nach dem Enddatum"); render(); return; }
+  if (field === "startDate" && !v) { render(); return; } /* a trip always needs a start date */
+  t[field] = v || null; saveState(); render();
+}
+
+function viewAddTrip() {
+  tripCountrySel = []; /* fresh form — safe: this view never re-renders while open */
+  return `
+  <div class="topbar">
+    ${state.trips.length ? `<button class="btn ghost" style="width:auto;padding:6px 2px;" onclick="go('trips')">✕</button>` : ""}
+    <div class="h1">Neue Reise</div><span style="width:30px"></span>
+  </div>
+  <div class="card">
+    <label class="field"><span>Name der Reise</span><input id="tripName" placeholder="z. B. Mexiko 2026"></label>
+    <label class="field" style="margin-bottom:6px;"><span>Reiseziele (optional)</span></label>
+    <div id="tripCountryList">${newTripCountriesHTML()}</div>
+    <button class="btn ghost" onclick="openCountrySheet()" style="margin-bottom:12px;">+ Reiseziel hinzufügen</button>
+    <label class="field"><span>Budget in ${esc(state.homeCurrency)} (optional)</span><input id="tripBudget" type="number" inputmode="decimal" placeholder="z. B. 3500"></label>
+    <label class="field"><span>Startdatum</span><input id="tripStart" type="date" value="${todayISO()}"></label>
+    <label class="field"><span>Enddatum (optional)</span><input id="tripEnd" type="date"></label>
+    <button class="btn" onclick="createTrip()">Reise anlegen</button>
+  </div>`;
+}
+function createTrip() {
+  const name = $("#tripName").value.trim();
+  if (!name) { toast("Bitte einen Namen eingeben"); return; }
+  const budget = parseFloat($("#tripBudget").value) || 0;
+  const countries = tripCountrySel.slice();
+  const startDate = $("#tripStart").value || todayISO();
+  const endDate = $("#tripEnd").value || null;
+  if (endDate && endDate < startDate) { toast("Enddatum liegt vor dem Startdatum"); return; }
+  const trip = { id: uid(), name, budget, startDate, endDate,
+    country: countries.length ? countries[0].name : null,
+    currency: countries.length ? countries[0].cur : state.homeCurrency,
+    countries,
+    travelers: ["Ich"], createdAt: new Date().toISOString(), expenses: [] };
+  state.trips.push(trip);
+  state.activeTripId = trip.id;
+  saveState(); toast("Reise angelegt ✓"); go("home");
+}
+function deleteTrip(id) {
+  const t = state.trips.find(x => x.id === id);
+  if (!t) return;
+  if (!confirm(`Reise „${t.name}" mit ${(t.expenses || []).length} Ausgaben wirklich löschen?`)) return;
+  state.trips = state.trips.filter(x => x.id !== id);
+  if (state.activeTripId === id) state.activeTripId = state.trips.length ? state.trips[0].id : null;
+  saveState();
+  if (state.ui.view === "trip-edit") { editingTripId = null; go("trips"); } else render();
+}
+
+/* ----- More / settings / export ----- */
+function viewMore() {
+  const trip = activeTrip();
+  return `
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+      <button class="icon-btn" onclick="goBack()" aria-label="Zurück" style="font-size:22px;">‹</button>
+      <div class="title">Einstellungen</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="h2">📤 Export</div>
+    <p class="muted" style="margin-bottom:12px;">CSV für Excel & Auswertungen am Computer. „Excel (DE)" nutzt Semikolon und Dezimalkomma.</p>
+    <div style="display:grid; gap:8px;">
+      <button class="btn secondary" onclick="exportCSV('trip', true)">Aktuelle Reise → Excel (DE)</button>
+      <button class="btn secondary" onclick="exportCSV('all', true)">Alle Reisen → Excel (DE)</button>
+      <button class="btn secondary" onclick="exportSummary()">Zusammenfassung „${esc((activeTrip() || {}).name || "")}" → Excel (DE)</button>
+      <button class="btn ghost" onclick="exportCSV('all', false)">Alle Reisen → Standard-CSV</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="h2">💾 Backup</div>
+    <p class="muted" style="margin-bottom:12px;">Deine Daten liegen nur auf diesem Gerät. Sichere sie regelmäßig als JSON-Datei.</p>
+    <div style="display:grid; gap:8px;">
+      <button class="btn secondary" onclick="exportBackup()">Backup erstellen (JSON)</button>
+      <button class="btn ghost" onclick="document.getElementById('importFile').click()">Backup wiederherstellen</button>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="if(this.files[0]) importBackup(this.files[0]); this.value='';">
+    </div>
+    ${state.lastBackupAt ? `<div class="muted" style="text-align:center; margin-top:8px;">Letztes Backup: ${new Date(state.lastBackupAt).toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" })}</div>` : ""}
+    <label class="field" style="margin-top:14px;"><span>Cloud-Backup nach Google Drive (geheime Skript-Adresse)</span>
+      <input id="cloudUrl" type="url" value="${esc(cloudCfg().url || "")}" placeholder="https://script.google.com/…/exec"
+        autocomplete="off" onchange="setCloudUrl(this.value)"></label>
+    ${cloudCfg().url ? `<button class="btn secondary" onclick="cloudBackupNow()">Jetzt in die Cloud sichern</button>
+    <div class="muted" style="text-align:center; margin-top:6px;">${cloudCfg().lastAt ? "Letzte Cloud-Sicherung: " + new Date(cloudCfg().lastAt).toLocaleString("de-DE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Sichert automatisch beim App-Start, sobald du online bist."}</div>`
+    : `<p class="muted" style="margin-top:2px;">Optional: sichert automatisch in dein Google Drive. Die Adresse bleibt nur auf diesem Gerät.</p>`}
+  </div>
+
+  <div class="card">
+    <div class="h2">⚙️ Einstellungen</div>
+    <label class="field"><span>Design</span></label>
+    <div class="payer-row" style="margin-top:-6px;">
+      ${[["auto", "Automatisch"], ["light", "Hell"], ["dark", "Dunkel"]].map(([t, l]) =>
+        `<button class="chip ${(state.settings.theme || "auto") === t ? "on" : ""}" onclick="setTheme('${t}')">${l}</button>`).join("")}
+    </div>
+    <label class="field"><span>Heimatwährung</span>
+      <button type="button" class="select-btn" onclick="openCurSheet('home')">${esc(state.homeCurrency)} – ${esc(curName(state.homeCurrency))} &nbsp;▾</button></label>
+    <button class="btn ghost" onclick="refreshRates().then(()=>toast('Kurse: '+state.rates.source))">Wechselkurse aktualisieren</button>
+    <div class="muted" style="text-align:center; margin-top:4px;">Kurse: ${state.rates.source === "live" ? "aktuell" : "Offline-Fallback"}</div>
+    <p class="muted" style="margin-top:10px;">Einstellungen zur einzelnen Reise (Budget, Datum, Reisende …) findest du unter Reisen → ✎.</p>
+  </div>
+
+  <div class="offline-note">TallyAway · Prototyp · läuft komplett auf deinem Gerät</div>
+  <div style="height:10px"></div>`;
+}
+function addTraveler() {
+  const t = editingTrip(); if (!t) return;
+  const n = prompt("Name der Person:", "");
+  if (!n || !n.trim()) return;
+  t.travelers.push(n.trim()); saveState(); render();
+}
+function removeTripCountry(i) {
+  const t = editingTrip(); if (!t) return;
+  t.countries = tripCountries(t).filter((_, x) => x !== i);
+  t.country = t.countries.length ? t.countries[0].name : null;
+  saveState(); render();
+}
+function removeTraveler(i) {
+  const t = editingTrip(); if (!t) return;
+  t.travelers.splice(i, 1);
+  if (!t.travelers.length) t.travelers = ["Ich"];
+  saveState(); render();
+}
+function setHomeCurrency(c) {
+  state.homeCurrency = c;
+  /* recompute all stored home amounts with current rates */
+  for (const t of state.trips) for (const e of (t.expenses || [])) {
+    e.amountHome = Math.round(toHome(e.amount, e.currency) * 100) / 100;
+    e.rate = e.currency === c ? 1 : Math.round((rateFor(c) / (rateFor(e.currency) || 1)) * 10000) / 10000;
+  }
+  saveState(); render(); toast("Heimatwährung: " + c);
+}
+/* ---------------- Boot ---------------- */
+applyTheme();
+render();
+refreshRates();
+autoCloudBackup();
+/* refresh the restore timestamp when the app is backgrounded, so returning
+   shortly after keeps the view */
+addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") saveUi(); });
+/* ask the browser to protect this origin's storage from eviction — matters on
+   iOS, which may purge localStorage of rarely used web apps */
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").then((reg) => {
+    /* look for a fresh build whenever the app returns to the foreground */
+    addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+  }).catch(() => {});
+  /* the new SW takes over immediately (skipWaiting + clients.claim in sw.js) —
+     offer a one-tap reload instead of the old "close and reopen twice" dance.
+     hadController guards the very first install, where no update happened. */
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) toastAction("Neue Version verfügbar", "Neu laden", () => location.reload(), 12000);
+    hadController = true;
+  });
+}
+</script>
+</body>
+</html>
