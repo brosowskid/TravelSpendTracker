@@ -518,6 +518,7 @@ const FLAG_OVERRIDES = {
   "Botswana": "BW", "Brunei": "BN", "Elfenbeinküste": "CI", "Großbritannien": "GB",
   "Hongkong": "HK", "Kap Verde": "CV", "Kongo (Dem. Republik)": "CD",
   "Kongo (Republik)": "CG", "Moldau": "MD", "Osttimor": "TL", "Palästina": "PS", "USA": "US",
+  "Russland": "RU", /* some engines alias the deprecated SU code to the same label */
 };
 let _regions = null; /* { byName: {germanName: ISO2}, valid: Set(ISO2) } */
 function _regionData() {
@@ -528,7 +529,12 @@ function _regionData() {
     for (let i = 0; i < 26; i++) for (let j = 0; j < 26; j++) {
       const code = String.fromCharCode(65 + i) + String.fromCharCode(65 + j);
       let label; try { label = dn.of(code); } catch { continue; }
-      if (label && label !== code) { _regions.byName[label] = code; _regions.valid.add(code); }
+      if (label && label !== code) {
+        /* first hit wins — deprecated alias codes (SU, …) come later in the
+           A-Z scan and must not overwrite the canonical mapping */
+        if (!(label in _regions.byName)) _regions.byName[label] = code;
+        _regions.valid.add(code);
+      }
     }
   } catch (e) { /* very old engine — rows just render without flags */ }
   Object.assign(_regions.byName, FLAG_OVERRIDES);
@@ -1765,11 +1771,6 @@ function viewTrips() {
       const total = tripTotal(t);
       const days = tripDays(t);
       const flags = tripCountries(t).slice(0, 3).map(c => countryFlag(c.name)).join("").trim();
-      const cats = byCategory(t);
-      const segs = [];
-      let grey = 0;
-      for (const [cid, sum] of cats) { if (CAT_COLORS[cid]) segs.push([CAT_COLORS[cid], sum]); else grey += sum; }
-      if (grey > 0) segs.push(["var(--muted)", grey]);
       out += `
     <div class="card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
       <div class="row">
@@ -1777,7 +1778,6 @@ function viewTrips() {
           ${flags ? `<div class="cat-ico" style="font-size:17px; background:var(--bg); width:auto; min-width:34px; padding:0 6px; white-space:nowrap;">${flags}</div>` : ""}
           <div style="min-width:0;">
             <div class="h2" style="margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(t.name)}</div>
-            <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") : ""} · ${days} ${days === 1 ? "Tag" : "Tage"}${total && days ? " · Ø " + fmtShort(total / days) + "/Tag" : ""}</div>
           </div>
         </div>
         <div style="text-align:right; flex:none;"><div style="font-weight:800; font-size:17px;">${fmtShort(total)}</div>
@@ -1786,9 +1786,7 @@ function viewTrips() {
             <button class="btn ghost" style="width:auto;padding:4px 10px;" onclick="event.stopPropagation(); editTrip('${t.id}')">✎</button>
           </div></div>
       </div>
-      ${total > 0 ? `<div style="display:flex; height:6px; border-radius:3px; overflow:hidden; gap:2px; margin-top:10px;">
-        ${segs.map(([col, sum]) => `<div style="flex:${(sum / total).toFixed(4)}; background:${col};"></div>`).join("")}
-      </div>` : ""}
+      <div class="muted" style="margin-top:8px;">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") : ""} · ${days} ${days === 1 ? "Tag" : "Tage"}${total && days ? " · Ø " + fmtShort(total / days) + "/Tag" : ""}</div>
     </div>`;
     }
     return out;
