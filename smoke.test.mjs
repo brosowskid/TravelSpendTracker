@@ -50,10 +50,9 @@ console.log("END-DATE KPI:", daysLeftKpi === 1 ? "OK" : "MISSING");
 // Add expense 1: 450 MXN Essen — MXN must already be preselected from the trip country
 await page.click(".fab");
 await page.waitForTimeout(200);
-const preselected = await page.locator(".amount-display .val").innerText();
+const preselected = await page.locator(".amount-display").innerText();
 console.log("AUTO CURRENCY:", preselected.includes("MXN") ? "OK" : "FAIL(" + preselected + ")");
-await page.click(".amount-display"); // keypad opens on tapping the amount
-for (const k of ["4", "5", "0"]) await page.click(`.key:has-text("${k}")`);
+await page.fill("#amountInput", "450"); // natives Eingabefeld (OS-Tastatur)
 const dateVal = await page.locator('input[type="date"]').inputValue();
 const todayIso = await page.evaluate(() => todayISO());
 console.log("DATE ROW DEFAULTS TO TODAY:", dateVal === todayIso ? "OK" : "FAIL(" + dateVal + ")");
@@ -66,10 +65,7 @@ await page.waitForTimeout(300);
 // Add expense 2: 53,74 EUR Hotel
 await page.click(".fab");
 await page.waitForTimeout(200);
-await page.click(".amount-display");
-for (const k of ["5", "3"]) await page.click(`.key:has-text("${k}")`);
-await page.click('.key:has-text(",")');
-for (const k of ["7", "4"]) await page.click(`.key:has-text("${k}")`);
+await page.fill("#amountInput", "53,74");
 await page.click('.chip:has-text("EUR")');
 await page.click('.cat-cell:has-text("Unterkunft")');
 await page.click('button:has-text("Hinzufügen")');
@@ -78,8 +74,7 @@ await page.waitForTimeout(300);
 // Add expense 3: 1200 MXN Ausflug — pick MXN via the searchable all-currencies sheet
 await page.click(".fab");
 await page.waitForTimeout(200);
-await page.click(".amount-display");
-for (const k of ["1", "2", "0", "0"]) await page.click(`.key:has-text("${k}")`);
+await page.fill("#amountInput", "1200");
 await page.click('.chip:has-text("Alle")');
 await page.fill("#curSearch", "peso");
 await page.waitForTimeout(150);

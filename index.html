@@ -177,26 +177,6 @@
   }
   .pill-btn:active { background: var(--accent-soft); }
   .pill-btn.primary { font-weight: 800; }
-  /* The keypad floats as a fixed panel above the nav (like the reference
-     calculator overlay the owner showed): always reachable without scrolling,
-     content scrolls beneath it, tapping the amount toggles it — with a short
-     pop-in so it visibly "appears" like the OS keyboard. */
-  @keyframes keypad-pop { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .keypad-wrap {
-    animation: keypad-pop .22s ease-out;
-    position: fixed; left: 0; right: 0; bottom: calc(64px + var(--safe-bottom)); z-index: 40;
-    background: var(--bg); padding: 10px 16px 8px;
-    border-radius: 18px 18px 0 0;
-    box-shadow: 0 -8px 24px rgba(16,32,30,.10);
-  }
-  .keypad-wrap .keypad { max-width: 520px; margin: 0 auto; }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .key { background: var(--card); box-shadow: var(--shadow); border-radius: 14px; min-height: 58px; padding: 0; font-size: 22px; font-weight: 650; text-align: center; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
-  .key:active { background: var(--accent); color: var(--on-accent); transform: scale(0.92); }
-  /* JS-driven press flash: :active alone is invisible on fast iOS taps.
-     Full accent (not accent-soft) — owner wants clearly visible feedback. */
-  @keyframes keyflash { 0%, 45% { background: var(--accent); color: var(--on-accent); transform: scale(0.92); } 100% { background: var(--card); transform: scale(1); } }
-  .key.pressed { animation: keyflash 260ms ease-out; }
   .payer-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 
   /* ---------- Bottom nav ---------- */
@@ -1069,10 +1049,8 @@ function render() {
   /* ongoing trip: start the scrollable chart at "today" (right end) */
   const sp = $('.spark.scroll[data-end]');
   if (sp) sp.scrollLeft = sp.scrollWidth;
-  /* jump to top only on a view change — re-renders within a view (keypad,
-     chips) must keep the scroll position, or the phone scrolls away from
-     the keypad on every tap. The keypad itself floats fixed above the nav
-     (.keypad-wrap), so it is usable without any scrolling. */
+  /* jump to top only on a view change — re-renders within a view (chips)
+     must keep the scroll position */
   if (view !== lastRenderedView) window.scrollTo(0, 0);
   lastRenderedView = view;
 }
@@ -1343,7 +1321,6 @@ function viewExpenses() {
 function startAdd() {
   if (!state.trips.length) { go("add-trip"); return; }
   editingExpenseId = null;
-  keypadOpen = false; /* keypad opens on tapping the amount (owner preference) */
   catExpanded = false;
   const trip = activeTrip();
   const last = (trip.expenses || [])[trip.expenses.length - 1];
@@ -1371,7 +1348,6 @@ function editExpense(id) {
   const e = (trip.expenses || []).find(x => x.id === id);
   if (!e) return;
   editingExpenseId = id;
-  keypadOpen = false;
   catExpanded = false;
   draft = { amountStr: String(Math.abs(e.amount)).replace(".", ","), sign: e.amount < 0 ? -1 : 1,
     currency: e.currency, category: e.category, note: e.note || "", date: e.date,
@@ -1381,12 +1357,28 @@ function editExpense(id) {
 }
 function draftAmount() { return parseFloat((draft.amountStr || "0").replace(",", ".")) || 0; }
 
-function amountDisplayHTML() {
+function convText() {
   const amt = draftAmount();
   const sgn = draft.sign === -1 ? "−" : "";
-  const conv = draft.currency !== state.homeCurrency && amt > 0 ? "≈ " + sgn + fmt(toHome(amt, draft.currency)) : "&nbsp;";
-  return `<div class="val" ${draft.amountStr ? "" : 'style="color:var(--muted);"'}>${sgn}${draft.amountStr || "0"}<span style="font-size:19px;color:var(--muted);"> ${esc(draft.currency)}</span></div>
-    <div class="conv">${conv}</div>`;
+  return draft.currency !== state.homeCurrency && amt > 0 ? "≈ " + sgn + fmt(toHome(amt, draft.currency)) : "&nbsp;";
+}
+/* Amount is a REAL input — tapping it opens the OS number pad (same as the
+   Kurs field; owner preferred that over the custom keypad overlay). */
+function amountDisplayHTML() {
+  return `<div style="display:flex; align-items:baseline; gap:6px;">
+      ${draft.sign === -1 ? '<span style="font-size:32px; font-weight:750;">−</span>' : ""}
+      <input id="amountInput" type="text" inputmode="decimal" autocomplete="off" value="${esc(draft.amountStr)}" placeholder="0"
+        oninput="amountTyped(this.value)"
+        style="border:none; background:transparent; padding:0; font-size:32px; font-weight:750; letter-spacing:-.02em; flex:1; min-width:0; border-radius:0;">
+      <span style="font-size:19px; color:var(--muted); flex:none;">${esc(draft.currency)}</span>
+    </div>
+    <div class="conv" id="convLine">${convText()}</div>`;
+}
+/* typing only patches the conversion line — never re-render (focus!) */
+function amountTyped(v) {
+  draft.amountStr = v.replace(/[^0-9.,]/g, "");
+  const el = $("#convLine");
+  if (el) el.innerHTML = convText();
 }
 function viewAdd() {
   const trip = activeTrip();
@@ -1403,9 +1395,9 @@ function viewAdd() {
   </div>
 
   <div class="muted" style="font-weight:600; margin:0 2px 8px;">${editingExpenseId ? "Ausgabe bearbeiten" : "Neue Ausgabe"}</div>
-  <div class="amount-display" onclick="toggleKeypad()">${amountDisplayHTML()}
+  <div class="amount-display">${amountDisplayHTML()}
     <div style="display:flex; justify-content:flex-end; margin-top:-22px;">
-      <button class="chip ${draft.sign === -1 ? "on" : ""}" style="padding:5px 12px; font-size:12px;" onclick="event.stopPropagation(); toggleRefund()">↩ Erstattung</button>
+      <button class="chip ${draft.sign === -1 ? "on" : ""}" style="padding:5px 12px; font-size:12px;" onclick="toggleRefund()">↩ Erstattung</button>
     </div>
   </div>
 
@@ -1460,37 +1452,12 @@ function viewAdd() {
   ${editingExpenseId && state.trips.length > 1 ? `<label class="field"><span>Reise (zum Verschieben ändern)</span>
     <select onchange="draft.tripId=this.value">${state.trips.map(t => `<option value="${t.id}" ${t.id === draft.tripId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>` : ""}
 
-  ${editingExpenseId ? `<button class="btn danger" style="margin-top:4px;" onclick="deleteExpense()">Ausgabe löschen</button>` : ""}
-
-  ${keypadOpen ? `<div style="height:290px"></div>
-  <div class="keypad-wrap"><div class="keypad">
-    ${["1","2","3","4","5","6","7","8","9",",","0","⌫"].map(k => `<button class="key" onclick="key('${k === "⌫" ? "back" : k}', this)">${k}</button>`).join("")}
-  </div></div>` : ""}`;
+  ${editingExpenseId ? `<button class="btn danger" style="margin-top:4px;" onclick="deleteExpense()">Ausgabe löschen</button>` : ""}`;
 }
-let keypadOpen = false; /* fixed keypad panel; opens by tapping the amount */
-function toggleKeypad() { keypadOpen = !keypadOpen; render(); }
 function cancelAdd() {
   const wasEditing = !!editingExpenseId;
   editingExpenseId = null;
   go(wasEditing ? "expenses" : "home"); /* back to where the user came from */
-}
-function key(k, el) {
-  /* visible press feedback: restart the flash animation on the tapped key
-     (works because the keypad DOM is no longer re-rendered per tap) */
-  if (el) { el.classList.remove("pressed"); void el.offsetWidth; el.classList.add("pressed"); }
-  if (navigator.vibrate) navigator.vibrate(8); /* Android only; iOS ignores it */
-  if (k === "back") draft.amountStr = draft.amountStr.slice(0, -1);
-  else if (k === ",") { if (!draft.amountStr.includes(",")) draft.amountStr = (draft.amountStr || "0") + ","; }
-  else {
-    const [, dec] = draft.amountStr.split(",");
-    if (dec !== undefined && dec.length >= 2) return;
-    if (draft.amountStr.replace(",", "").length >= 9) return;
-    draft.amountStr += k;
-  }
-  /* patch only the amount display — a full render() would reset the scroll
-     position and pull the keypad out from under the thumb */
-  const disp = $(".amount-display");
-  if (disp) disp.innerHTML = amountDisplayHTML(); else render();
 }
 function toggleRefund() { draft.sign = draft.sign === -1 ? 1 : -1; render(); }
 function setDraftDate(v) { draft.date = v || todayISO(); render(); }
