@@ -1159,7 +1159,7 @@ function viewHome() {
   <div class="topbar">
     <div style="display:flex; align-items:center; gap:10px; min-width:0;">${backBtnHTML()}<div class="title">Übersicht</div></div>
     <div style="display:flex; align-items:center; gap:8px;">
-      <button class="icon-btn" onclick="openMapMaybe()" aria-label="Karte">🗺</button>
+      <button class="icon-btn" onclick="openMapMaybe()" aria-label="Karte">${MAP_ICON}</button>
       <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
       <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
     </div>
@@ -1498,9 +1498,6 @@ function locRowHTML() {
   const l = draft && draft.location;
   const label = l && l.label ? l.label : "";
   const hasCoords = l && typeof l.lat === "number";
-  /* Google-Maps-style folded map + red pin, drawn inline (the real logo is
-     trademarked; this look-alike is ours) */
-  const MAP_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6 9 4v14l-6 2z" fill="#0F9D58"/><path d="M9 4l6 2v14l-6-2z" fill="#FFD84D"/><path d="M15 6l6-2v14l-6 2z" fill="#4285F4"/><path d="M17 1.5c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.2 4.5 8.2s4.5-4.8 4.5-8.2c0-2.5-2-4.5-4.5-4.5z" fill="#EA4335" stroke="#fff" stroke-width=".9"/><circle cx="17" cy="6" r="1.7" fill="#fff"/></svg>`;
   return `<input id="locInput" value="${esc(label)}" placeholder="z. B. Strandbar, Altstadt …"
       autocomplete="off" oninput="locInputChanged(this.value)" style="flex:1; min-width:0;">
     ${hasCoords ? `<button class="icon-btn" style="flex:none;" onclick="openInMaps(${l.lat},${l.lon})" aria-label="Karte öffnen">${MAP_ICON}</button>
@@ -1548,8 +1545,16 @@ async function resolvePlaceName() {
 }
 function openInMaps(lat, lon) { window.open("https://maps.google.com/?q=" + lat + "," + lon, "_blank"); }
 
-/* ----- Trip map: Leaflet + OpenStreetMap, lazy-loaded ONLY when the map
-   view opens — the core app stays dependency-free and offline-first ----- */
+/* Google-Maps-style folded map + red pin, drawn inline (the real logo is
+   trademarked; this look-alike is ours). Used on the location row and as
+   the map buttons in the Übersicht/Statistik topbars. */
+const MAP_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6 9 4v14l-6 2z" fill="#0F9D58"/><path d="M9 4l6 2v14l-6-2z" fill="#FFD84D"/><path d="M15 6l6-2v14l-6 2z" fill="#4285F4"/><path d="M17 1.5c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.2 4.5 8.2s4.5-4.8 4.5-8.2c0-2.5-2-4.5-4.5-4.5z" fill="#EA4335" stroke="#fff" stroke-width=".9"/><circle cx="17" cy="6" r="1.7" fill="#fff"/></svg>`;
+
+/* ----- Maps: Leaflet + OpenStreetMap, lazy-loaded ONLY when a map view
+   opens — the core app stays dependency-free and offline-first.
+   Two scopes: "trip" (active trip, from Übersicht) and "all" (world map
+   across every trip, from Statistik). ----- */
+let mapScope = "trip";
 let _leafletLoading = null;
 function loadLeaflet() {
   if (window.L) return Promise.resolve();
@@ -1566,14 +1571,17 @@ function loadLeaflet() {
   });
   return _leafletLoading;
 }
-function openMap() { go("map", state.ui.view); }
+function hasCoordsIn(exps) { return (exps || []).some(x => x.location && typeof x.location.lat === "number"); }
 function openMapMaybe() {
   const t = activeTrip();
-  if (!t || !(t.expenses || []).some(x => x.location && typeof x.location.lat === "number")) {
-    toast("Noch keine Orte erfasst – nutze 📍 beim Eintragen");
-    return;
-  }
-  openMap();
+  if (!t || !hasCoordsIn(t.expenses)) { toast("Noch keine Orte erfasst – nutze 📍 beim Eintragen"); return; }
+  mapScope = "trip";
+  go("map", state.ui.view);
+}
+function openWorldMap() {
+  if (!state.trips.some(t => hasCoordsIn(t.expenses))) { toast("Noch keine Orte erfasst – nutze 📍 beim Eintragen"); return; }
+  mapScope = "all";
+  go("map", state.ui.view);
 }
 function viewMap() {
   const trip = activeTrip();
@@ -1581,9 +1589,10 @@ function viewMap() {
   <div class="topbar">
     <div style="display:flex; align-items:center; gap:10px; min-width:0;">
       <button class="icon-btn" onclick="goBack()" aria-label="Zurück" style="font-size:22px;">‹</button>
-      <div class="title">Karte</div>
+      <div class="title">${mapScope === "all" ? "Weltkarte" : "Karte"}</div>
     </div>
-    <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
+    ${mapScope === "all" ? `<div class="trip-chip" style="pointer-events:none;">Alle Reisen</div>`
+      : `<button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>`}
   </div>
   <div id="map" style="height:calc(100vh - 210px); border-radius:var(--radius); box-shadow:var(--shadow); background:var(--card);"></div>
   <div class="muted" style="text-align:center; margin-top:8px;">Marker antippen für Details · Karten: © OpenStreetMap</div>`;
@@ -1595,18 +1604,20 @@ async function initMap() {
     el.innerHTML = '<div class="empty"><div class="e">🗺</div>Die Karte braucht eine Internetverbindung.</div>';
     return;
   }
-  const trip = activeTrip();
-  const pts = (trip.expenses || []).filter(x => x.location && typeof x.location.lat === "number");
+  const trips = mapScope === "all" ? state.trips : [activeTrip()].filter(Boolean);
   const map = L.map(el);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
   const bounds = [];
-  for (const x of pts) {
-    const c = catById(x.category);
-    L.marker([x.location.lat, x.location.lon]).addTo(map)
-      .bindPopup(`${c.icon} ${esc(x.note || c.name)}<br><b>${fmt(x.amountHome)}</b> · ${dateLabel(x.date)}${x.location.label ? "<br>📍 " + esc(x.location.label) : ""}`);
-    bounds.push([x.location.lat, x.location.lon]);
+  for (const t of trips) {
+    for (const x of (t.expenses || [])) {
+      if (!x.location || typeof x.location.lat !== "number") continue;
+      const c = catById(x.category);
+      L.marker([x.location.lat, x.location.lon]).addTo(map)
+        .bindPopup(`${mapScope === "all" ? "<b>" + esc(t.name) + "</b><br>" : ""}${c.icon} ${esc(x.note || c.name)}<br><b>${fmt(x.amountHome)}</b> · ${dateLabel(x.date)}${x.location.label ? "<br>📍 " + esc(x.location.label) : ""}`);
+      bounds.push([x.location.lat, x.location.lon]);
+    }
   }
-  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: mapScope === "all" ? 6 : 14 });
   else map.setView([20, 0], 2);
 }
 function setDraftCountry(n) { draft.country = n; render(); }
@@ -1751,7 +1762,12 @@ function viewStats() {
   const catRows = Object.entries(cats).sort((a, b) => b[1] - a[1]);
   const maxCat = catRows.length ? catRows[0][1] : 1;
   return `
-  <div class="topbar"><div class="title">Statistik</div><button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button></div>
+  <div class="topbar"><div class="title">Statistik</div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="icon-btn" onclick="openWorldMap()" aria-label="Weltkarte">${MAP_ICON}</button>
+      <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
+    </div>
+  </div>
   <div class="cur-row" style="padding-top:2px;">
     <button class="chip ${!statsYear ? "on" : ""}" onclick="setStatsYear(null)">Alle</button>
     ${years.map(y => `<button class="chip ${statsYear === y ? "on" : ""}" onclick="setStatsYear('${y}')">${y}</button>`).join("")}
