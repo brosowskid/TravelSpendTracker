@@ -150,7 +150,7 @@ console.log("CSV ROW1:", csv.split("\r\n")[1]);
 console.log("CSV rows:", csv.split("\r\n").length - 1);
 
 // Dark mode
-await page.click('.icon-btn');
+await page.click('.icon-btn[aria-label="Einstellungen"]');
 await page.waitForTimeout(200);
 await page.click('.chip:has-text("Dunkel")');
 await page.waitForTimeout(200);
