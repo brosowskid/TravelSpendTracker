@@ -1368,9 +1368,9 @@ function viewAdd() {
   const curs = [...new Set([trip.currency, draft.currency, last && last.currency, ...destCurs, state.homeCurrency, "EUR", "USD"])].filter(Boolean).slice(0, 5);
   return `
   <div class="topbar">
-    <button class="pill-btn" onclick="cancelAdd()">Abbrechen</button>
-    <div class="h1" style="font-size:18px; white-space:nowrap;">${editingExpenseId ? "Bearbeiten" : "Neue Ausgabe"}</div>
-    <button class="pill-btn primary" onclick="saveExpense()">${editingExpenseId ? "Speichern" : "Hinzufügen"}</button>
+    <button class="pill-btn" style="flex:none;" onclick="cancelAdd()">Abbrechen</button>
+    <div class="h1" style="font-size:17px; white-space:nowrap; flex:1; min-width:0; text-align:center; overflow:hidden; text-overflow:ellipsis; padding:0 6px;">${editingExpenseId ? "Bearbeiten" : "Neue Ausgabe"}</div>
+    <button class="pill-btn primary" style="flex:none;" onclick="saveExpense()">${editingExpenseId ? "Speichern" : "Hinzufügen"}</button>
   </div>
 
   <div class="amount-display" onclick="toggleKeypad()">${amountDisplayHTML()}</div>
@@ -1381,7 +1381,7 @@ function viewAdd() {
   </div>
 
   <div class="cur-row">
-    ${curs.map(c => `<button class="chip ${c === draft.currency ? "on" : ""}" onclick="setCur('${c}')">${c}</button>`).join("")}
+    ${curs.map(c => `<button class="chip ${c === draft.currency ? "on" : ""}" onclick="setCur('${c}')">${curFlag(c)}${c}</button>`).join("")}
     <button class="chip" onclick="openCurSheet()">Alle ▾</button>
   </div>
 
