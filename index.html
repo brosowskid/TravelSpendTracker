@@ -519,6 +519,7 @@ const FLAG_OVERRIDES = {
   "Hongkong": "HK", "Kap Verde": "CV", "Kongo (Dem. Republik)": "CD",
   "Kongo (Republik)": "CG", "Moldau": "MD", "Osttimor": "TL", "Palästina": "PS", "USA": "US",
   "Russland": "RU", /* some engines alias the deprecated SU code to the same label */
+  "Ver. Arab. Emirate": "AE", /* trip configs use the short form */
 };
 let _regions = null; /* { byName: {germanName: ISO2}, valid: Set(ISO2) } */
 function _regionData() {
@@ -1839,8 +1840,10 @@ function viewStats() {
     ${trips.map(t => {
       const sum = tripTotal(t);
       const d = tripDays(t);
+      /* comparison view: bar + total + the one comparison number (Ø/Tag);
+         dates/day counts live on the Reisen page — deliberately no duplicate */
       return `<div class="cat-row" onclick="switchTrip('${t.id}','stats')" style="cursor:pointer;">
-        <div class="cat-mid"><div class="cat-name">${esc(t.name)} <span class="muted" style="font-weight:400;">· ${d} ${d === 1 ? "Tag" : "Tage"} · Ø ${fmtShort(d ? sum / d : 0)}/Tag</span></div>
+        <div class="cat-mid"><div class="cat-name">${esc(t.name)} <span class="muted" style="font-weight:400;">· Ø ${fmtShort(d ? sum / d : 0)}/Tag</span></div>
           <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxTotal * 100))}%"></div></div></div>
         <div class="cat-amt">${fmtShort(sum)}</div></div>`;
     }).join("")}
