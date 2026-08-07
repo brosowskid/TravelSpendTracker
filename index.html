@@ -1773,7 +1773,7 @@ function viewTrips() {
       if (y !== year) { year = y; out += `<div class="day-head"><span>${y}</span></div>`; }
       const total = tripTotal(t);
       const days = tripDays(t);
-      const flags = tripCountries(t).slice(0, 3).map(c => countryFlag(c.name)).join("").trim();
+      const flags = tripCountries(t).map(c => countryFlag(c.name)).join("").trim();
       out += `
     <div class="card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
       <div class="row">
