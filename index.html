@@ -1870,7 +1870,7 @@ function viewStats() {
     return `<div class="card">
     <div class="h2">Nach Kategorie</div>
     ${shown.map(row).join("")}
-    ${minor.length && major.length ? `<button class="btn ghost" style="padding:8px; margin-top:2px;" onclick="toggleStatCats()">${statCatsExpanded ? "Weniger anzeigen ▴" : "Weitere " + minor.length + " Kategorien (unter 5 %) ▾"}</button>` : ""}
+    ${minor.length && major.length ? `<button class="btn ghost" style="padding:8px; margin-top:2px;" onclick="toggleStatCats()">${statCatsExpanded ? "Weniger anzeigen ▴" : "Weitere " + minor.length + " Kategorien ▾"}</button>` : ""}
     <div class="muted" style="margin-top:6px;">Antippen zeigt Anteil und Anzahl der Einträge.</div>
   </div>`;
   })() : ""}` : `<div class="card empty"><div class="e">📈</div>Keine Reisen in diesem Zeitraum.</div>`}`;
