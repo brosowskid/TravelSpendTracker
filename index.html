@@ -480,6 +480,12 @@ function dateLabel(iso) {
   return dt.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
 }
 function catById(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
+/* Fixed per-category colors for the dashboard donut + breakdown bars (the six
+   most common categories; everything else renders muted gray). Validated with
+   the dataviz palette checker on the light AND dark card surfaces — change
+   only with re-validation. Color follows the category, never its rank. */
+const CAT_COLORS = { essen: "#0d9488", hotel: "#6366f1", flug: "#0284c7", supermarkt: "#d97706", ausflug: "#db2777", mietwagen: "#65a30d" };
+function catColor(cid) { return CAT_COLORS[cid] || "var(--muted)"; }
 function activeTrip() { return state.trips.find(t => t.id === state.activeTripId) || null; }
 
 /* ---------------- Theme ---------------- */
@@ -1152,10 +1158,28 @@ function viewHome() {
   <div class="card">
     <div class="ring-wrap">
       <div class="ring">
-        <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="Budgetauslastung">
+        <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="Ausgaben nach Kategorie">
           <circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--bg)" stroke-width="11"/>
-          <circle cx="66" cy="66" r="${r}" fill="none" stroke="${over ? "var(--danger)" : budget > 0 && pct >= 0.9 ? "var(--warn)" : "var(--accent)"}" stroke-width="11"
-            stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - (budget > 0 ? pct : (total > 0 ? 1 : 0)))}"/>
+          ${(() => {
+            /* donut segments per category (owner request), same colors as the
+               breakdown bars below; with a budget the segments fill only the
+               spent fraction of the circle, the empty track = remaining budget */
+            if (!total) return "";
+            const usedFrac = budget > 0 ? pct : 1;
+            const segs = [];
+            let grey = 0;
+            for (const [cid, sum] of cats) { if (CAT_COLORS[cid]) segs.push([CAT_COLORS[cid], sum]); else grey += sum; }
+            if (grey > 0) segs.push(["var(--muted)", grey]);
+            const GAP = segs.length > 1 ? 2.5 : 0;
+            let off = 0, out = "";
+            for (const [col, sum] of segs) {
+              const share = sum / total * usedFrac * circ;
+              const len = Math.max(0, share - GAP);
+              if (len > 1) out += `<circle cx="66" cy="66" r="${r}" fill="none" stroke="${col}" stroke-width="11" stroke-dasharray="${len} ${circ - len}" stroke-dashoffset="${-off - GAP / 2}"/>`;
+              off += share;
+            }
+            return out;
+          })()}
         </svg>
         <div class="center">
           <div class="big">${fmtShort(total)}</div>
@@ -1217,7 +1241,7 @@ function viewHome() {
       return `<div class="cat-row" onclick="goFiltered('${cid}', null)" style="cursor:pointer;">
         <div class="cat-ico">${c.icon}</div>
         <div class="cat-mid"><div class="cat-name">${esc(c.name)} <span class="muted" style="font-weight:400;">· ${total ? Math.round(sum / total * 100) : 0} %</span></div>
-          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%"></div></div></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%; background:${catColor(cid)};"></div></div></div>
         <div class="cat-amt">${fmtShort(sum)}</div></div>`;
     }).join("")}
     <div class="muted" style="margin-top:8px;">Antippen öffnet die gefilterte Ausgabenliste.</div>
@@ -1369,7 +1393,7 @@ function amountDisplayHTML() {
       ${draft.sign === -1 ? '<span style="font-size:32px; font-weight:750;">−</span>' : ""}
       <input id="amountInput" type="text" inputmode="decimal" autocomplete="off" value="${esc(draft.amountStr)}" placeholder="0"
         oninput="amountTyped(this.value)"
-        style="border:none; background:transparent; padding:0; font-size:32px; font-weight:750; letter-spacing:-.02em; flex:1; min-width:0; border-radius:0;">
+        style="border:none; background:transparent; padding:0; font-size:32px; font-weight:750; letter-spacing:-.02em; flex:none; width:${Math.min(10, (draft.amountStr.length || 1) + 0.5)}ch; border-radius:0;">
       <span style="font-size:19px; color:var(--muted); flex:none;">${esc(draft.currency)}</span>
     </div>
     <div class="conv" id="convLine">${convText()}</div>`;
@@ -1379,6 +1403,9 @@ function amountTyped(v) {
   draft.amountStr = v.replace(/[^0-9.,]/g, "");
   const el = $("#convLine");
   if (el) el.innerHTML = convText();
+  /* input grows with its content so the currency sits right beside the number */
+  const inp = $("#amountInput");
+  if (inp) inp.style.width = Math.min(10, (inp.value.length || 1) + 0.5) + "ch";
 }
 function viewAdd() {
   const trip = activeTrip();
@@ -1446,9 +1473,6 @@ function viewAdd() {
 
   <label class="field"><span>Notiz (optional)</span>
     <input id="noteInput" value="${esc(draft.note)}" placeholder="z. B. Tacos am Strand" oninput="draft.note=this.value"></label>
-  ${editingExpenseId && draft.currency !== state.homeCurrency ? `<label class="field"><span>Kurs (1 ${esc(draft.currency)} = ? ${esc(state.homeCurrency)})</span>
-    <input type="number" inputmode="decimal" step="0.0001" min="0" value="${draft.rate || ""}"
-      onchange="draft.rate=parseFloat(this.value)||draft.rate"></label>` : ""}
   ${editingExpenseId && state.trips.length > 1 ? `<label class="field"><span>Reise (zum Verschieben ändern)</span>
     <select onchange="draft.tripId=this.value">${state.trips.map(t => `<option value="${t.id}" ${t.id === draft.tripId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>` : ""}
 
@@ -1813,7 +1837,7 @@ function viewStats() {
       return `<div class="cat-row" onclick="statsCatToast('${cid}')" style="cursor:pointer;">
         <div class="cat-ico">${c.icon}</div>
         <div class="cat-mid"><div class="cat-name">${esc(c.name)} <span class="muted" style="font-weight:400;">· ${total ? Math.round(sum / total * 100) : 0} %</span></div>
-          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%"></div></div></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%; background:${catColor(cid)};"></div></div></div>
         <div class="cat-amt">${fmtShort(sum)}</div></div>`;
     };
     return `<div class="card">
