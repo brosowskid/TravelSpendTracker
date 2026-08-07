@@ -1720,8 +1720,9 @@ function saveExpense() {
     trip.expenses.push(rec);
   }
   if (!state.recentCurrencies.includes(draft.currency)) { state.recentCurrencies.push(draft.currency); if (state.recentCurrencies.length > 6) state.recentCurrencies.shift(); }
+  const wasEditing = !!editingExpenseId;
   editingExpenseId = null;
-  toast(movedTo ? "Nach „" + movedTo + "“ verschoben ✓" : fmt(rec.amountHome) + " erfasst ✓");
+  toast(movedTo ? "Nach „" + movedTo + "“ verschoben ✓" : fmt(rec.amountHome) + (wasEditing ? " gespeichert ✓" : " erfasst ✓"));
   checkBudgetWarning(trip); /* after the confirmation toast — a crossing warning replaces it */
   saveState();
   go("home");
