@@ -1506,7 +1506,8 @@ function locRowHTML() {
   return `<input id="locInput" value="${esc(label)}" placeholder="z. B. Strandbar, Altstadt …"
       autocomplete="off" oninput="locInputChanged(this.value)" style="flex:1; min-width:0;">
     ${hasCoords ? `<button class="icon-btn" style="flex:none;" onclick="openInMaps(${l.lat},${l.lon})" aria-label="Karte öffnen">${MAP_ICON}</button>
-    <button class="icon-btn" style="flex:none;" onclick="clearLocation()" aria-label="Ort entfernen">✕</button>` : ""}
+    <button class="icon-btn" style="flex:none;" onclick="clearLocation()" aria-label="Ort entfernen">✕</button>`
+    : `<button class="icon-btn" style="flex:none;" onclick="geocodeLocation()" aria-label="Ort suchen">🔍</button>`}
     <button class="icon-btn" style="flex:none;" onclick="captureLocation()" aria-label="Standort erfassen">📍</button>`;
 }
 /* typing must never trigger a re-render (focus loss) — draft only */
@@ -1549,6 +1550,30 @@ async function resolvePlaceName() {
   } catch (e) { /* offline – Koordinaten bleiben, Name kommt ggf. beim Bearbeiten */ }
 }
 function openInMaps(lat, lon) { window.open("https://maps.google.com/?q=" + lat + "," + lon, "_blank"); }
+/* Forward geocoding for AFTER-the-fact entries: typing "Danialand Agadir" and
+   tapping 🔍 finds the coordinates, so the place shows on the maps. Biased
+   with the expense's country for better hits; retries without it. */
+async function geocodeLocation() {
+  const l = draft && draft.location;
+  const q = l && l.label;
+  if (!q) { toast("Erst einen Ort eintippen, dann 🔍"); return; }
+  const attempts = [draft.country ? q + ", " + draft.country : null, q].filter(Boolean);
+  try {
+    toast("Suche „" + q + "“ …");
+    for (const query of attempts) {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=de&q=${encodeURIComponent(query)}`);
+      const d = await res.json();
+      if (d.length) {
+        l.lat = Math.round(parseFloat(d[0].lat) * 1e5) / 1e5;
+        l.lon = Math.round(parseFloat(d[0].lon) * 1e5) / 1e5;
+        paintLocRow();
+        toast("Gefunden ✓ – über das Kartensymbol prüfen");
+        return;
+      }
+    }
+    toast("Nicht gefunden – genauer eintippen (z. B. mit Stadt)");
+  } catch (e) { toast("Suche fehlgeschlagen – offline?"); }
+}
 
 /* Google-Maps-style folded map + red pin, drawn inline (the real logo is
    trademarked; this look-alike is ours). Used on the location row and as

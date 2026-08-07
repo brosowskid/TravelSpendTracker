@@ -200,6 +200,16 @@ const loc = await page.evaluate(async () => {
 check("GPS offline erfasst + gespeichert", loc.captured && loc.saved && Math.abs(loc.saved.lat - 30.42018) < 0.001, loc.saved);
 check("CSV-Spalte Ort", loc.csvHead.includes(";Ort;"), loc.csvHead);
 
+/* 10e. after-the-fact geocoding via the search button */
+await page.route("**/nominatim.openstreetmap.org/search**", r => r.fulfill({ status: 200, contentType: "application/json", body: '[{"lat":"30.4278","lon":"-9.5981","display_name":"Danialand, Agadir"}]' }));
+const geo = await page.evaluate(async () => {
+  startAdd();
+  locInputChanged("Danialand Agadir");
+  await geocodeLocation();
+  return draft.location;
+});
+check("Ortssuche liefert Koordinaten", geo && Math.abs(geo.lat - 30.4278) < 0.001 && geo.label === "Danialand Agadir", geo);
+
 /* 10. CSV has Land column */
 const csv = await page.evaluate(() => buildCSV(state.trips, true).split("\r\n")[0]);
 check("CSV-Spalte Land", csv.includes(";Land;"), csv);
