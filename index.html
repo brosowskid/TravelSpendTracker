@@ -164,10 +164,21 @@
   .cat-cell .n { font-size: 9.5px; color: var(--muted); line-height: 1.2; font-weight: 600; height: 23px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .cat-cell.on { border-color: var(--accent); background: var(--accent-soft); }
   .cat-cell.on .n { color: var(--accent-deep); }
+  /* Cancel/Add as soft pill buttons (reference design the owner liked):
+     card-colored capsules with accent text, both in the topbar */
+  .pill-btn {
+    background: var(--card); box-shadow: var(--shadow); border-radius: 999px;
+    padding: 10px 18px; font-size: 15px; font-weight: 600; color: var(--accent-deep);
+  }
+  .pill-btn:active { background: var(--accent-soft); }
+  .pill-btn.primary { font-weight: 800; }
   /* The keypad floats as a fixed panel above the nav (like the reference
      calculator overlay the owner showed): always reachable without scrolling,
-     content scrolls beneath it, tapping the amount toggles it. */
+     content scrolls beneath it, tapping the amount toggles it — with a short
+     pop-in so it visibly "appears" like the OS keyboard. */
+  @keyframes keypad-pop { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
   .keypad-wrap {
+    animation: keypad-pop .22s ease-out;
     position: fixed; left: 0; right: 0; bottom: calc(64px + var(--safe-bottom)); z-index: 40;
     background: var(--bg); padding: 10px 16px 8px;
     border-radius: 18px 18px 0 0;
@@ -227,7 +238,7 @@
   .sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 16px; }
   .offline-note { font-size: 11.5px; color: var(--muted); text-align: center; margin-top: 6px; }
   .cur-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; padding: 13px 6px; border-bottom: 1px solid var(--line); font-size: 15px; }
-  .cur-item b { flex: none; width: 52px; }
+  .cur-item b { flex: none; width: 82px; }
   .cur-item span { flex: 1; text-align: right; }
 </style>
 </head>
@@ -505,8 +516,40 @@ function curName(code) {
 function allCurrencyCodes() {
   return [...new Set([...Object.keys(state.rates.map), ...Object.keys(FALLBACK_RATES)])].sort();
 }
+
+/* Emoji flags for the currency/country picker rows. German region names come
+   from Intl.DisplayNames (offline, ships no data); the few names our
+   COUNTRIES list spells differently are mapped by hand. */
+const FLAG_OVERRIDES = {
+  "Botswana": "BW", "Brunei": "BN", "Elfenbeinküste": "CI", "Großbritannien": "GB",
+  "Hongkong": "HK", "Kap Verde": "CV", "Kongo (Dem. Republik)": "CD",
+  "Kongo (Republik)": "CG", "Moldau": "MD", "Osttimor": "TL", "Palästina": "PS", "USA": "US",
+};
+let _regions = null; /* { byName: {germanName: ISO2}, valid: Set(ISO2) } */
+function _regionData() {
+  if (_regions) return _regions;
+  _regions = { byName: {}, valid: new Set() };
+  try {
+    const dn = new Intl.DisplayNames(["de"], { type: "region" });
+    for (let i = 0; i < 26; i++) for (let j = 0; j < 26; j++) {
+      const code = String.fromCharCode(65 + i) + String.fromCharCode(65 + j);
+      let label; try { label = dn.of(code); } catch { continue; }
+      if (label && label !== code) { _regions.byName[label] = code; _regions.valid.add(code); }
+    }
+  } catch (e) { /* very old engine — rows just render without flags */ }
+  Object.assign(_regions.byName, FLAG_OVERRIDES);
+  return _regions;
+}
+function flagEmoji(iso2) { return String.fromCodePoint(...[...iso2].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65)); }
+function countryFlag(name) { const code = _regionData().byName[name]; return code ? flagEmoji(code) + " " : ""; }
+/* ISO-4217: the first two letters are the issuer country (EUR handled via EU) */
+function curFlag(code) {
+  const cc = String(code).slice(0, 2);
+  return _regionData().valid.has(cc) ? flagEmoji(cc) + " " : "";
+}
+
 function curRow(c) {
-  return `<button class="cur-item" onclick="pickCur('${c}')"><b>${c}</b><span class="muted">${esc(curName(c))}</span></button>`;
+  return `<button class="cur-item" onclick="pickCur('${c}')"><b>${curFlag(c)}${c}</b><span class="muted">${esc(curName(c))}</span></button>`;
 }
 let curSheetMode = "draft"; /* "draft" = expense entry, "home" = home currency, "trip" = trip default */
 function openCurSheet(mode) {
@@ -540,7 +583,7 @@ function closeSheet() { $("#sheetHost").innerHTML = ""; }
 let tripCountrySel = []; /* [{name, cur}] for the add-trip form — reset when that view renders */
 function newTripCountriesHTML() {
   return tripCountrySel.length
-    ? tripCountrySel.map((c, i) => `<div class="list-item"><b>${esc(c.name)} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeNewTripCountry(${i})">Entfernen</button></div>`).join("")
+    ? tripCountrySel.map((c, i) => `<div class="list-item"><b>${countryFlag(c.name)}${esc(c.name)} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeNewTripCountry(${i})">Entfernen</button></div>`).join("")
     : `<div class="muted" style="padding:2px 2px 6px;">Das erste Ziel setzt die Standard-Währung der Reise.</div>`;
 }
 function paintNewTripCountries() {
@@ -551,7 +594,7 @@ function paintNewTripCountries() {
 function removeNewTripCountry(i) { tripCountrySel.splice(i, 1); paintNewTripCountries(); }
 function countryRow(i) {
   const [n, c] = COUNTRIES[i];
-  return `<button class="cur-item" onclick="pickCountry(${i})"><b>${c}</b><span class="muted">${esc(n)}</span></button>`;
+  return `<button class="cur-item" onclick="pickCountry(${i})"><b>${countryFlag(n)}${c}</b><span class="muted">${esc(n)}</span></button>`;
 }
 let countrySheetMode = "new"; /* "new" = add-trip form, "edit" = trip settings */
 function openCountrySheet(mode) {
@@ -1325,9 +1368,9 @@ function viewAdd() {
   const curs = [...new Set([trip.currency, draft.currency, last && last.currency, ...destCurs, state.homeCurrency, "EUR", "USD"])].filter(Boolean).slice(0, 5);
   return `
   <div class="topbar">
-    <button class="btn ghost" style="width:auto; padding:6px 0;" onclick="cancelAdd()">Abbrechen</button>
+    <button class="pill-btn" onclick="cancelAdd()">Abbrechen</button>
     <div class="h1" style="font-size:18px; white-space:nowrap;">${editingExpenseId ? "Bearbeiten" : "Neue Ausgabe"}</div>
-    <button class="btn" style="width:auto; padding:9px 16px; font-size:15px;" onclick="saveExpense()">${editingExpenseId ? "Speichern" : "Hinzufügen"}</button>
+    <button class="pill-btn primary" onclick="saveExpense()">${editingExpenseId ? "Speichern" : "Hinzufügen"}</button>
   </div>
 
   <div class="amount-display" onclick="toggleKeypad()">${amountDisplayHTML()}</div>
@@ -1612,10 +1655,10 @@ function viewTripEdit() {
     <label class="field"><span>Name der Reise</span>
       <input value="${esc(t.name)}" onchange="updateTripName(this.value)"></label>
     <label class="field"><span>Reiseziele (Währungen erscheinen als Chips bei der Eingabe)</span></label>
-    ${tripCountries(t).map((c, i) => `<div class="list-item"><b>${esc(c.name)} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeTripCountry(${i})">Entfernen</button></div>`).join("")}
+    ${tripCountries(t).map((c, i) => `<div class="list-item"><b>${countryFlag(c.name)}${esc(c.name)} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeTripCountry(${i})">Entfernen</button></div>`).join("")}
     <button class="btn ghost" onclick="openCountrySheet('edit')" style="margin-bottom:12px;">+ Reiseziel hinzufügen</button>
     <label class="field"><span>Standard-Währung für neue Ausgaben</span>
-      <button type="button" class="select-btn" onclick="openCurSheet('trip')">${esc(t.currency || state.homeCurrency)} – ${esc(curName(t.currency || state.homeCurrency))} &nbsp;▾</button></label>
+      <button type="button" class="select-btn" onclick="openCurSheet('trip')">${curFlag(t.currency || state.homeCurrency)}${esc(t.currency || state.homeCurrency)} – ${esc(curName(t.currency || state.homeCurrency))} &nbsp;▾</button></label>
     <label class="field"><span>Budget (${esc(state.homeCurrency)}, 0 = kein Budget)</span>
       <input type="number" inputmode="decimal" value="${t.budget || ""}" placeholder="0" onchange="updateTripBudget(this.value)"></label>
     <label class="field"><span>Startdatum</span>
@@ -1743,7 +1786,7 @@ function viewMore() {
         `<button class="chip ${(state.settings.theme || "auto") === t ? "on" : ""}" onclick="setTheme('${t}')">${l}</button>`).join("")}
     </div>
     <label class="field"><span>Heimatwährung</span>
-      <button type="button" class="select-btn" onclick="openCurSheet('home')">${esc(state.homeCurrency)} – ${esc(curName(state.homeCurrency))} &nbsp;▾</button></label>
+      <button type="button" class="select-btn" onclick="openCurSheet('home')">${curFlag(state.homeCurrency)}${esc(state.homeCurrency)} – ${esc(curName(state.homeCurrency))} &nbsp;▾</button></label>
     <button class="btn ghost" onclick="refreshRates().then(()=>toast('Kurse: '+state.rates.source))">Wechselkurse aktualisieren</button>
     <div class="muted" style="text-align:center; margin-top:4px;">Kurse: ${state.rates.source === "live" ? "aktuell" : "Offline-Fallback"}</div>
     <p class="muted" style="margin-top:10px;">Einstellungen zur einzelnen Reise (Budget, Datum, Reisende …) findest du unter Reisen → ✎.</p>

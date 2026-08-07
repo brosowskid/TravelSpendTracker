@@ -1,7 +1,7 @@
 /* TallyAway service worker — cache-first so the app opens offline.
    Bump CACHE_VERSION whenever index.html changes, otherwise phones keep
    serving the old cached build. */
-const CACHE_VERSION = "tallyaway-v3";
+const CACHE_VERSION = "tallyaway-v4";
 const PRECACHE = [
   "./",
   "./index.html",
