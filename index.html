@@ -211,7 +211,7 @@
   /* active tab: soft pill around the icon so the current view is obvious */
   .nav-btn .i { font-size: 21px; line-height: 1; padding: 3px 14px; border-radius: 999px; }
   .nav-btn.on { color: var(--accent-deep); font-weight: 800; }
-  .nav-btn.on .i { background: var(--accent); box-shadow: 0 2px 8px rgba(13,148,136,.35); }
+  .nav-btn.on .i { background: var(--accent); background: color-mix(in srgb, var(--accent) 55%, var(--card)); box-shadow: 0 2px 6px rgba(13,148,136,.25); }
   .fab {
     flex: none; width: 58px; height: 58px; margin: -26px 6px 0; border-radius: 50%;
     background: var(--accent); color: var(--on-accent); font-size: 30px; font-weight: 500;
@@ -1413,7 +1413,7 @@ function viewAdd() {
   </div>
 
   <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Ort (optional)</div>
-  <div class="payer-row" id="locRow">${locRowHTML()}</div>
+  <div class="payer-row" id="locRow" style="flex-wrap:nowrap; align-items:center;">${locRowHTML()}</div>
 
   <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Kategorie</div>
   <div class="cat-grid">
@@ -1477,17 +1477,35 @@ function setDraftDate(v) { draft.date = v || todayISO(); render(); }
    (works offline); the place name resolves via OpenStreetMap when online ----- */
 function locRowHTML() {
   const l = draft && draft.location;
-  if (!l) return `<button class="chip" onclick="captureLocation()">📍 Standort erfassen</button>`;
-  return `<button class="chip on" onclick="openInMaps(${l.lat},${l.lon})">📍 ${esc(l.label || l.lat.toFixed(4) + ", " + l.lon.toFixed(4))}</button>
-    <button class="chip" onclick="clearLocation()">✕</button>`;
+  const label = l && l.label ? l.label : "";
+  const hasCoords = l && typeof l.lat === "number";
+  return `<input id="locInput" value="${esc(label)}" placeholder="z. B. Strandbar, Altstadt …"
+      autocomplete="off" oninput="locInputChanged(this.value)" style="flex:1; min-width:0;">
+    ${hasCoords ? `<button class="icon-btn" style="flex:none;" onclick="openInMaps(${l.lat},${l.lon})" aria-label="Karte öffnen">🗺</button>
+    <button class="icon-btn" style="flex:none;" onclick="clearLocation()" aria-label="Ort entfernen">✕</button>` : ""}
+    <button class="icon-btn" style="flex:none;" onclick="captureLocation()" aria-label="Standort erfassen">📍</button>`;
 }
-function paintLocRow() { const row = $("#locRow"); if (row) row.innerHTML = locRowHTML(); }
+/* typing must never trigger a re-render (focus loss) — draft only */
+function locInputChanged(v) {
+  v = v.trim();
+  if (!draft.location && v) { draft.location = { lat: null, lon: null, label: v }; return; }
+  if (draft.location) {
+    draft.location.label = v || null;
+    if (!v && draft.location.lat == null) draft.location = null;
+  }
+}
+function paintLocRow() {
+  const row = $("#locRow");
+  if (row && document.activeElement !== $("#locInput")) row.innerHTML = locRowHTML();
+}
 function captureLocation() {
   if (!navigator.geolocation) { toast("Standort auf diesem Gerät nicht verfügbar"); return; }
   const row = $("#locRow");
   if (row) row.innerHTML = `<span class="muted" style="padding:9px 2px;">📍 Standort wird ermittelt…</span>`;
   navigator.geolocation.getCurrentPosition((pos) => {
-    draft.location = { lat: Math.round(pos.coords.latitude * 1e5) / 1e5, lon: Math.round(pos.coords.longitude * 1e5) / 1e5, label: null };
+    /* keep a label the user already typed — GPS only adds the coordinates */
+    const typed = draft.location && draft.location.label;
+    draft.location = { lat: Math.round(pos.coords.latitude * 1e5) / 1e5, lon: Math.round(pos.coords.longitude * 1e5) / 1e5, label: typed || null };
     paintLocRow();
     resolvePlaceName();
   }, () => { toast("Standort nicht verfügbar – Berechtigung erteilt?"); paintLocRow(); },
