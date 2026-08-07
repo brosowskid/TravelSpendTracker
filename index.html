@@ -1159,6 +1159,7 @@ function viewHome() {
   <div class="topbar">
     <div style="display:flex; align-items:center; gap:10px; min-width:0;">${backBtnHTML()}<div class="title">Übersicht</div></div>
     <div style="display:flex; align-items:center; gap:8px;">
+      <button class="icon-btn" onclick="openMapMaybe()" aria-label="Karte">🗺</button>
       <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
       <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
     </div>
@@ -1238,9 +1239,6 @@ function viewHome() {
     }).join("")}
     <div class="muted" style="margin-top:8px;">Antippen öffnet die gefilterte Ausgabenliste.</div>
   </div>` : `<div class="card empty"><div class="e">🧾</div>Noch keine Ausgaben.<br>Tippe auf <b>+</b>, um die erste zu erfassen.</div>`}
-
-  ${(trip.expenses || []).some(x => x.location && typeof x.location.lat === "number")
-    ? `<button class="btn secondary" style="margin-bottom:14px;" onclick="openMap()">🗺 Karte der Ausgabenorte</button>` : ""}
 
   ${(() => {
     /* multi-destination trips: where did the money go, by country */
@@ -1569,6 +1567,14 @@ function loadLeaflet() {
   return _leafletLoading;
 }
 function openMap() { go("map", state.ui.view); }
+function openMapMaybe() {
+  const t = activeTrip();
+  if (!t || !(t.expenses || []).some(x => x.location && typeof x.location.lat === "number")) {
+    toast("Noch keine Orte erfasst – nutze 📍 beim Eintragen");
+    return;
+  }
+  openMap();
+}
 function viewMap() {
   const trip = activeTrip();
   return `
