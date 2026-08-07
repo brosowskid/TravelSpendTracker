@@ -1755,18 +1755,44 @@ function viewTrips() {
       <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
     </div>
   </div>
-  ${state.trips.slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || "")).map(t => `
+  ${(() => {
+    const sorted = state.trips.slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""));
+    const D = (iso) => iso ? Number(iso.slice(8, 10)) + "." + Number(iso.slice(5, 7)) + "." : "";
+    let year = null, out = "";
+    for (const t of sorted) {
+      const y = (t.startDate || "").slice(0, 4);
+      if (y !== year) { year = y; out += `<div class="day-head"><span>${y}</span></div>`; }
+      const total = tripTotal(t);
+      const days = tripDays(t);
+      const flags = tripCountries(t).slice(0, 3).map(c => countryFlag(c.name)).join("").trim();
+      const cats = byCategory(t);
+      const segs = [];
+      let grey = 0;
+      for (const [cid, sum] of cats) { if (CAT_COLORS[cid]) segs.push([CAT_COLORS[cid], sum]); else grey += sum; }
+      if (grey > 0) segs.push(["var(--muted)", grey]);
+      out += `
     <div class="card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
       <div class="row">
-        <div><div class="h2" style="margin:0;">${esc(t.name)}</div>
-          <div class="muted">${(t.expenses || []).length} Ausgaben${tripCountries(t).length ? " · " + esc(tripCountries(t).map(c => c.name).join(", ")) : ""}${t.budget ? " · Budget " + fmtShort(t.budget) : ""}</div></div>
-        <div style="text-align:right;"><div style="font-weight:800; font-size:17px;">${fmtShort(tripTotal(t))}</div>
+        <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+          ${flags ? `<div class="cat-ico" style="font-size:17px; background:var(--bg); width:auto; min-width:34px; padding:0 6px; white-space:nowrap;">${flags}</div>` : ""}
+          <div style="min-width:0;">
+            <div class="h2" style="margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(t.name)}</div>
+            <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") : ""} · ${days} ${days === 1 ? "Tag" : "Tage"}${total && days ? " · Ø " + fmtShort(total / days) + "/Tag" : ""}</div>
+          </div>
+        </div>
+        <div style="text-align:right; flex:none;"><div style="font-weight:800; font-size:17px;">${fmtShort(total)}</div>
           <div style="display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:4px;">
             ${t.id === state.activeTripId ? '<span class="pill">ausgewählt</span>' : ""}
             <button class="btn ghost" style="width:auto;padding:4px 10px;" onclick="event.stopPropagation(); editTrip('${t.id}')">✎</button>
           </div></div>
       </div>
-    </div>`).join("")}
+      ${total > 0 ? `<div style="display:flex; height:6px; border-radius:3px; overflow:hidden; gap:2px; margin-top:10px;">
+        ${segs.map(([col, sum]) => `<div style="flex:${(sum / total).toFixed(4)}; background:${col};"></div>`).join("")}
+      </div>` : ""}
+    </div>`;
+    }
+    return out;
+  })()}
   <p class="muted" style="margin:2px 4px 14px;">Neue Ausgaben landen immer in der ausgewählten Reise – zum Wechseln einfach eine andere antippen. Neue Reise: + oben rechts.</p>`;
 }
 function switchTrip(id, from) { state.activeTripId = id; expFilter = { q: "", cat: null, country: null }; saveState(); go("home", from); }
