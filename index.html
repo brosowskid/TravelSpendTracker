@@ -542,10 +542,16 @@ function _regionData() {
 }
 function flagEmoji(iso2) { return String.fromCodePoint(...[...iso2].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65)); }
 function countryFlag(name) { const code = _regionData().byName[name]; return code ? flagEmoji(code) + " " : ""; }
-/* ISO-4217: the first two letters are the issuer country (EUR handled via EU) */
+/* ISO-4217: the first two letters are the issuer country (EUR resolves via EU).
+   Supranational currencies (CFA-Franc & Co., X-prefix) have no country — they
+   get a globe so no row looks forgotten. ANG's issuer country was dissolved
+   in 2010; Curaçao is the factual successor. */
+const CUR_FLAG_SPECIAL = { "ANG": "CW" };
 function curFlag(code) {
-  const cc = String(code).slice(0, 2);
-  return _regionData().valid.has(cc) ? flagEmoji(cc) + " " : "";
+  code = String(code);
+  if (CUR_FLAG_SPECIAL[code]) return flagEmoji(CUR_FLAG_SPECIAL[code]) + " ";
+  const cc = code.slice(0, 2);
+  return _regionData().valid.has(cc) ? flagEmoji(cc) + " " : "🌍 ";
 }
 
 function curRow(c) {
