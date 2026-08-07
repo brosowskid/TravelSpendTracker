@@ -1566,8 +1566,12 @@ async function geocodeLocation() {
       if (d.length) {
         l.lat = Math.round(parseFloat(d[0].lat) * 1e5) / 1e5;
         l.lon = Math.round(parseFloat(d[0].lon) * 1e5) / 1e5;
+        /* adopt the official place name (e.g. "Aéroport Agadir Al Massira")
+           instead of the user's rough search text; retyping keeps the pin */
+        const nice = d[0].name || (d[0].display_name || "").split(",")[0].trim();
+        if (nice) l.label = nice;
         paintLocRow();
-        toast("Gefunden ✓ – über das Kartensymbol prüfen");
+        toast("Gefunden: " + (nice || q) + " ✓");
         return;
       }
     }
