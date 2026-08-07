@@ -1801,19 +1801,29 @@ function viewStats() {
       return `<div class="list-item"><b>${y}</b><div style="font-weight:750">${fmtShort(sum)}</div></div>`;
     }).join("")}
   </div>` : ""}
-  ${catRows.length ? `<div class="card">
-    <div class="h2">Nach Kategorie</div>
-    ${catRows.map(([cid, sum]) => {
+  ${catRows.length ? (() => {
+    /* only shares >= 5% by default; the long tail expands on demand */
+    const major = catRows.filter(([, sum]) => total && sum / total >= 0.05);
+    const minor = catRows.filter(([, sum]) => !total || sum / total < 0.05);
+    const shown = statCatsExpanded || !major.length ? catRows : major;
+    const row = ([cid, sum]) => {
       const c = catById(cid);
       return `<div class="cat-row" onclick="statsCatToast('${cid}')" style="cursor:pointer;">
         <div class="cat-ico">${c.icon}</div>
         <div class="cat-mid"><div class="cat-name">${esc(c.name)} <span class="muted" style="font-weight:400;">· ${total ? Math.round(sum / total * 100) : 0} %</span></div>
           <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(sum / maxCat * 100))}%"></div></div></div>
         <div class="cat-amt">${fmtShort(sum)}</div></div>`;
-    }).join("")}
-    <div class="muted" style="margin-top:8px;">Antippen zeigt Anteil und Anzahl der Einträge.</div>
-  </div>` : ""}` : `<div class="card empty"><div class="e">📈</div>Keine Reisen in diesem Zeitraum.</div>`}`;
+    };
+    return `<div class="card">
+    <div class="h2">Nach Kategorie</div>
+    ${shown.map(row).join("")}
+    ${minor.length && major.length ? `<button class="btn ghost" style="padding:8px; margin-top:2px;" onclick="toggleStatCats()">${statCatsExpanded ? "Weniger anzeigen ▴" : "Weitere " + minor.length + " Kategorien (unter 5 %) ▾"}</button>` : ""}
+    <div class="muted" style="margin-top:6px;">Antippen zeigt Anteil und Anzahl der Einträge.</div>
+  </div>`;
+  })() : ""}` : `<div class="card empty"><div class="e">📈</div>Keine Reisen in diesem Zeitraum.</div>`}`;
 }
+let statCatsExpanded = false; /* transient */
+function toggleStatCats() { statCatsExpanded = !statCatsExpanded; render(); }
 /* Detail toast for a stats category row (same interactivity as the trip bars). */
 function statsCatToast(cid) {
   const trips = state.trips.filter(t => !statsYear || (t.startDate || "").startsWith(statsYear));
