@@ -208,8 +208,10 @@
   }
   .nav .inner { max-width: 520px; margin: 0 auto; display: flex; align-items: center; }
   .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; color: var(--muted); font-size: 10.5px; font-weight: 600; }
-  .nav-btn .i { font-size: 21px; line-height: 1; }
-  .nav-btn.on { color: var(--accent-deep); }
+  /* active tab: soft pill around the icon so the current view is obvious */
+  .nav-btn .i { font-size: 21px; line-height: 1; padding: 3px 14px; border-radius: 999px; }
+  .nav-btn.on { color: var(--accent-deep); font-weight: 750; }
+  .nav-btn.on .i { background: var(--accent-soft); }
   .fab {
     flex: none; width: 58px; height: 58px; margin: -26px 6px 0; border-radius: 50%;
     background: var(--accent); color: var(--on-accent); font-size: 30px; font-weight: 500;
@@ -487,6 +489,7 @@ function fmtShort(n, cur) {
   return (Math.round(n * 100) / 100).toLocaleString("de-DE", { maximumFractionDigits: n >= 100 ? 0 : 2 }) + " " + sym;
 }
 function todayISO() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function yesterdayISO() { const d = new Date(); d.setDate(d.getDate() - 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function dateLabel(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
@@ -1387,10 +1390,10 @@ function viewAdd() {
   </div>
 
   <div class="muted" style="font-weight:600; margin:0 2px 8px;">${editingExpenseId ? "Ausgabe bearbeiten" : "Neue Ausgabe"}</div>
-  <div class="amount-display" onclick="toggleKeypad()">${amountDisplayHTML()}</div>
-
-  <div class="refund-row">
-    <button class="chip ${draft.sign === -1 ? "on" : ""}" onclick="toggleRefund()">↩ Erstattung</button>
+  <div class="amount-display" onclick="toggleKeypad()">${amountDisplayHTML()}
+    <div style="display:flex; justify-content:flex-end; margin-top:-22px;">
+      <button class="chip ${draft.sign === -1 ? "on" : ""}" style="padding:5px 12px; font-size:12px;" onclick="event.stopPropagation(); toggleRefund()">↩ Erstattung</button>
+    </div>
   </div>
 
   <div class="cur-row">
@@ -1398,6 +1401,15 @@ function viewAdd() {
     <button class="chip" onclick="openCurSheet()">Alle ▾</button>
   </div>
 
+  <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Datum</div>
+  <div class="payer-row" style="align-items:center;">
+    <button class="chip ${draft.date === todayISO() ? "on" : ""}" onclick="setDraftDate(todayISO())">Heute</button>
+    <button class="chip ${draft.date === yesterdayISO() ? "on" : ""}" onclick="setDraftDate(yesterdayISO())">Gestern</button>
+    <input type="date" value="${draft.date}" max="${todayISO()}" onchange="setDraftDate(this.value)"
+      style="width:auto; flex:1; min-width:150px; padding:9px 12px; ${draft.date !== todayISO() && draft.date !== yesterdayISO() ? "border-color:var(--accent);" : ""}">
+  </div>
+
+  <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Kategorie</div>
   <div class="cat-grid">
     ${CATEGORIES.map(c => `<button class="cat-cell ${draft.category === c.id ? "on" : ""}" onclick="setCat('${c.id}')"><div class="e">${c.icon}</div><div class="n">${esc(c.name)}</div></button>`).join("")}
   </div>
@@ -1407,14 +1419,13 @@ function viewAdd() {
     ${tripCountries(trip).map(c => `<button class="chip ${draft.country === c.name ? "on" : ""}" onclick="setDraftCountry('${esc(c.name)}')">${esc(c.name)}</button>`).join("")}
   </div>` : ""}
 
-  ${tripTravelers(trip).length > 1 ? `<div class="payer-row">
+  ${tripTravelers(trip).length > 1 ? `<div class="muted" style="font-weight:600; margin:2px 2px 8px;">Bezahlt von</div>
+  <div class="payer-row">
     ${tripTravelers(trip).map(p => `<button class="chip ${draft.payer === p ? "on" : ""}" onclick="setPayer('${esc(p)}')">${esc(p)}</button>`).join("")}
   </div>` : ""}
 
   <label class="field"><span>Notiz (optional)</span>
     <input id="noteInput" value="${esc(draft.note)}" placeholder="z. B. Tacos am Strand" oninput="draft.note=this.value"></label>
-  ${editingExpenseId ? `<label class="field"><span>Datum</span>
-    <input type="date" value="${draft.date}" max="${todayISO()}" onchange="draft.date=this.value||'${todayISO()}'"></label>` : ""}
   ${editingExpenseId && draft.currency !== state.homeCurrency ? `<label class="field"><span>Kurs (1 ${esc(draft.currency)} = ? ${esc(state.homeCurrency)})</span>
     <input type="number" inputmode="decimal" step="0.0001" min="0" value="${draft.rate || ""}"
       onchange="draft.rate=parseFloat(this.value)||draft.rate"></label>` : ""}
@@ -1454,6 +1465,7 @@ function key(k, el) {
   if (disp) disp.innerHTML = amountDisplayHTML(); else render();
 }
 function toggleRefund() { draft.sign = draft.sign === -1 ? 1 : -1; render(); }
+function setDraftDate(v) { draft.date = v || todayISO(); render(); }
 function setDraftCountry(n) { draft.country = n; render(); }
 function setCur(c) {
   draft.currency = c;
@@ -1491,8 +1503,8 @@ function saveExpense() {
   const rec = {
     id: editingExpenseId || uid(),
     ts: new Date().toISOString(),
-    /* new entries are always stamped "now"; the date is only editable afterwards */
-    date: editingExpenseId ? draft.date : todayISO(),
+    /* spending date comes from the date row (defaults to today); ts stays "now" */
+    date: draft.date || todayISO(),
     amount: amt,
     currency: draft.currency,
     amountHome: Math.round(amt * rate * 100) / 100,
@@ -1556,7 +1568,12 @@ function undoDelete() {
 /* ----- Trips ----- */
 function viewTrips() {
   return `
-  <div class="topbar"><div class="title">Reisen</div><button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button></div>
+  <div class="topbar"><div class="title">Reisen</div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="icon-btn" onclick="go('add-trip')" aria-label="Neue Reise" style="font-size:22px;">+</button>
+      <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
+    </div>
+  </div>
   ${state.trips.slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || "")).map(t => `
     <div class="card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
       <div class="row">
@@ -1569,8 +1586,7 @@ function viewTrips() {
           </div></div>
       </div>
     </div>`).join("")}
-  <p class="muted" style="margin:2px 4px 14px;">Neue Ausgaben landen immer in der ausgewählten Reise – zum Wechseln einfach eine andere antippen. Da passiert nichts automatisch.</p>
-  <button class="btn secondary" onclick="go('add-trip')">+ Neue Reise</button>`;
+  <p class="muted" style="margin:2px 4px 14px;">Neue Ausgaben landen immer in der ausgewählten Reise – zum Wechseln einfach eine andere antippen. Neue Reise: + oben rechts.</p>`;
 }
 function switchTrip(id, from) { state.activeTripId = id; expFilter = { q: "", cat: null, country: null }; saveState(); go("home", from); }
 

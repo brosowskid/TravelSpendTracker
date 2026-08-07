@@ -54,8 +54,9 @@ const preselected = await page.locator(".amount-display .val").innerText();
 console.log("AUTO CURRENCY:", preselected.includes("MXN") ? "OK" : "FAIL(" + preselected + ")");
 await page.click(".amount-display"); // keypad opens on tapping the amount
 for (const k of ["4", "5", "0"]) await page.click(`.key:has-text("${k}")`);
-const dateFieldHidden = await page.locator('input[type="date"]').count();
-console.log("DATE FIELD HIDDEN ON ADD:", dateFieldHidden === 0 ? "OK" : "FAIL");
+const dateVal = await page.locator('input[type="date"]').inputValue();
+const todayIso = await page.evaluate(() => todayISO());
+console.log("DATE ROW DEFAULTS TO TODAY:", dateVal === todayIso ? "OK" : "FAIL(" + dateVal + ")");
 await page.click('.cat-cell:has-text("Restaurant")');
 await page.fill("#noteInput", "Tacos am Strand");
 await page.screenshot({ path: "shot-2-add.png" });
