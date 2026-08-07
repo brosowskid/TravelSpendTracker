@@ -184,6 +184,22 @@ const setBack = await page.evaluate(() => {
 });
 check("Einstellungen-Zurück zur Herkunft", setBack.inMore && setBack.returned === "stats", setBack);
 
+/* 10d. location capture: GPS stored offline, resolves later; CSV Ort column */
+await page.context().grantPermissions(["geolocation"], { origin: "http://localhost:8140" });
+await page.context().setGeolocation({ latitude: 30.42018, longitude: -9.59815 });
+await page.route("**/nominatim.openstreetmap.org/**", r => r.abort()); /* offline case */
+const loc = await page.evaluate(async () => {
+  startAdd();
+  captureLocation();
+  await new Promise(r => setTimeout(r, 800));
+  const captured = draft.location && typeof draft.location.lat === "number";
+  key("9"); setCat("essen"); saveExpense();
+  const e = state.trips[0].expenses[state.trips[0].expenses.length - 1];
+  return { captured, saved: e.location, csvHead: buildCSV(state.trips, true).split("\r\n")[0] };
+});
+check("GPS offline erfasst + gespeichert", loc.captured && loc.saved && Math.abs(loc.saved.lat - 30.42018) < 0.001, loc.saved);
+check("CSV-Spalte Ort", loc.csvHead.includes(";Ort;"), loc.csvHead);
+
 /* 10. CSV has Land column */
 const csv = await page.evaluate(() => buildCSV(state.trips, true).split("\r\n")[0]);
 check("CSV-Spalte Land", csv.includes(";Land;"), csv);

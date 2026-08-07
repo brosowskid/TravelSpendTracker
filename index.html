@@ -813,12 +813,14 @@ function csvEscape(v) { v = String(v ?? ""); return /[";\n,]/.test(v) ? '"' + v.
 function buildCSV(trips, germanExcel) {
   const sep = germanExcel ? ";" : ",";
   const num = (n) => germanExcel ? String(n.toFixed(2)).replace(".", ",") : n.toFixed(2);
-  const head = ["Datum", "Zeitstempel", "Reise", "Land", "Beschreibung", "Kategorie", "Betrag", "Währung", "Betrag (" + state.homeCurrency + ")", "Kurs", "Bezahlt von", "Notiz"];
+  const head = ["Datum", "Zeitstempel", "Reise", "Land", "Ort", "Beschreibung", "Kategorie", "Betrag", "Währung", "Betrag (" + state.homeCurrency + ")", "Kurs", "Bezahlt von", "Notiz"];
   const rows = [head.join(sep)];
   for (const t of trips) {
     for (const e of (t.expenses || []).slice().sort((a, b) => a.date.localeCompare(b.date))) {
       rows.push([
-        e.date, e.ts || "", csvEscape(t.name), csvEscape(e.country || ""), csvEscape(e.note || catById(e.category).name), csvEscape(catById(e.category).name),
+        e.date, e.ts || "", csvEscape(t.name), csvEscape(e.country || ""),
+        csvEscape(e.location ? (e.location.label || e.location.lat + "," + e.location.lon) : ""),
+        csvEscape(e.note || catById(e.category).name), csvEscape(catById(e.category).name),
         num(e.amount), e.currency, num(e.amountHome),
         germanExcel ? String((e.rate || 1).toFixed(4)).replace(".", ",") : (e.rate || 1).toFixed(4),
         csvEscape(e.payer || ""), csvEscape(e.note || ""),
@@ -1286,7 +1288,7 @@ function expListHTML(trip) {
         return `<div class="exp" onclick="editExpense('${e.id}')">
           <div class="cat-ico">${c.icon}</div>
           <div class="info"><div class="t">${esc(e.note || c.name)}</div>
-            ${(() => { const sub = [e.note ? c.name : null, tripTravelers(trip).length > 1 ? e.payer : null].filter(Boolean).join(" · "); return sub ? `<div class="s">${esc(sub)}</div>` : ""; })()}</div>
+            ${(() => { const sub = [e.note ? c.name : null, e.location && e.location.label ? "📍 " + e.location.label : null, tripTravelers(trip).length > 1 ? e.payer : null].filter(Boolean).join(" · "); return sub ? `<div class="s">${esc(sub)}</div>` : ""; })()}</div>
           <div class="amts"><div class="home">${fmt(e.amountHome)}</div>
             ${e.currency !== state.homeCurrency ? `<div class="orig">${fmt(e.amount, e.currency)}</div>` : ""}</div>
         </div>`;
@@ -1343,6 +1345,7 @@ function startAdd() {
     category: null, note: "", date: todayISO(),
     payer: last ? (last.payer || tripTravelers(trip)[0]) : tripTravelers(trip)[0],
     country: defaultExpCountry(trip, last),
+    location: null,
   };
   go("add");
 }
@@ -1363,7 +1366,7 @@ function editExpense(id) {
   draft = { amountStr: String(Math.abs(e.amount)).replace(".", ","), sign: e.amount < 0 ? -1 : 1,
     currency: e.currency, category: e.category, note: e.note || "", date: e.date,
     payer: e.payer || tripTravelers(trip)[0], rate: e.rate,
-    country: e.country || null, tripId: trip.id };
+    country: e.country || null, tripId: trip.id, location: e.location || null };
   go("add");
 }
 function draftAmount() { return parseFloat((draft.amountStr || "0").replace(",", ".")) || 0; }
@@ -1408,6 +1411,9 @@ function viewAdd() {
     <input type="date" value="${draft.date}" max="${todayISO()}" onchange="setDraftDate(this.value)"
       style="width:auto; flex:1; min-width:150px; padding:9px 12px; ${draft.date !== todayISO() && draft.date !== yesterdayISO() ? "border-color:var(--accent);" : ""}">
   </div>
+
+  <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Ort (optional)</div>
+  <div class="payer-row" id="locRow">${locRowHTML()}</div>
 
   <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Kategorie</div>
   <div class="cat-grid">
@@ -1466,6 +1472,41 @@ function key(k, el) {
 }
 function toggleRefund() { draft.sign = draft.sign === -1 ? 1 : -1; render(); }
 function setDraftDate(v) { draft.date = v || todayISO(); render(); }
+
+/* ----- Optional location on an expense: one tap grabs the GPS position
+   (works offline); the place name resolves via OpenStreetMap when online ----- */
+function locRowHTML() {
+  const l = draft && draft.location;
+  if (!l) return `<button class="chip" onclick="captureLocation()">📍 Standort erfassen</button>`;
+  return `<button class="chip on" onclick="openInMaps(${l.lat},${l.lon})">📍 ${esc(l.label || l.lat.toFixed(4) + ", " + l.lon.toFixed(4))}</button>
+    <button class="chip" onclick="clearLocation()">✕</button>`;
+}
+function paintLocRow() { const row = $("#locRow"); if (row) row.innerHTML = locRowHTML(); }
+function captureLocation() {
+  if (!navigator.geolocation) { toast("Standort auf diesem Gerät nicht verfügbar"); return; }
+  const row = $("#locRow");
+  if (row) row.innerHTML = `<span class="muted" style="padding:9px 2px;">📍 Standort wird ermittelt…</span>`;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    draft.location = { lat: Math.round(pos.coords.latitude * 1e5) / 1e5, lon: Math.round(pos.coords.longitude * 1e5) / 1e5, label: null };
+    paintLocRow();
+    resolvePlaceName();
+  }, () => { toast("Standort nicht verfügbar – Berechtigung erteilt?"); paintLocRow(); },
+  { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+}
+function clearLocation() { if (draft) draft.location = null; paintLocRow(); }
+async function resolvePlaceName() {
+  const l = draft && draft.location;
+  if (!l || l.label) return;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${l.lat}&lon=${l.lon}&accept-language=de&zoom=14`);
+    const d = await res.json();
+    const a = d.address || {};
+    const label = a.city || a.town || a.village || a.suburb || a.municipality || d.name || null;
+    /* patch only the location row — never re-render the form from background */
+    if (label && draft && draft.location === l) { l.label = label; paintLocRow(); }
+  } catch (e) { /* offline – Koordinaten bleiben, Name kommt ggf. beim Bearbeiten */ }
+}
+function openInMaps(lat, lon) { window.open("https://maps.google.com/?q=" + lat + "," + lon, "_blank"); }
 function setDraftCountry(n) { draft.country = n; render(); }
 function setCur(c) {
   draft.currency = c;
@@ -1513,6 +1554,7 @@ function saveExpense() {
     note: draft.note.trim(),
     payer: draft.payer,
     country: draft.country || null,
+    location: draft.location || null,
     rateSource,
   };
   let movedTo = null;
