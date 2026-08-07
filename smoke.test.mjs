@@ -87,6 +87,7 @@ const hits = await page.locator(".cur-item").count();
 console.log("CURRENCY SEARCH 'peso' hits:", hits);
 await page.click('.cur-item:has-text("MXN")');
 await page.waitForTimeout(150);
+await page.click('text=Alle Kategorien'); // Ausflüge liegt außerhalb der Top-8
 await page.click('.cat-cell:has-text("Ausflüge")');
 await page.click('button:has-text("Hinzufügen")');
 await page.waitForTimeout(400);

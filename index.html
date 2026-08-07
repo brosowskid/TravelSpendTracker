@@ -1336,6 +1336,7 @@ function startAdd() {
   if (!state.trips.length) { go("add-trip"); return; }
   editingExpenseId = null;
   keypadOpen = false; /* keypad opens on tapping the amount (owner preference) */
+  catExpanded = false;
   const trip = activeTrip();
   const last = (trip.expenses || [])[trip.expenses.length - 1];
   /* currency default: last used in this trip → trip's destination currency → home */
@@ -1363,6 +1364,7 @@ function editExpense(id) {
   if (!e) return;
   editingExpenseId = id;
   keypadOpen = false;
+  catExpanded = false;
   draft = { amountStr: String(Math.abs(e.amount)).replace(".", ","), sign: e.amount < 0 ? -1 : 1,
     currency: e.currency, category: e.category, note: e.note || "", date: e.date,
     payer: e.payer || tripTravelers(trip)[0], rate: e.rate,
@@ -1416,9 +1418,21 @@ function viewAdd() {
   <div class="payer-row" id="locRow" style="flex-wrap:nowrap; align-items:center;">${locRowHTML()}</div>
 
   <div class="muted" style="font-weight:600; margin:2px 2px 8px;">Kategorie</div>
-  <div class="cat-grid">
-    ${CATEGORIES.map(c => `<button class="cat-cell ${draft.category === c.id ? "on" : ""}" onclick="setCat('${c.id}')"><div class="e">${c.icon}</div><div class="n">${esc(c.name)}</div></button>`).join("")}
-  </div>
+  ${(() => {
+    /* collapsed: the trip's 8 most-used categories (stable sort keeps the
+       curated order for ties) — the everyday case stays one tap; rare
+       categories sit behind "Alle Kategorien" */
+    const counts = {};
+    for (const e of trip.expenses || []) counts[e.category] = (counts[e.category] || 0) + 1;
+    const ordered = CATEGORIES.slice().sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
+    const topIds = ordered.slice(0, 8).map(c => c.id);
+    const expanded = catExpanded || (draft.category && !topIds.includes(draft.category));
+    const shown = expanded ? CATEGORIES : ordered.slice(0, 8);
+    return `<div class="cat-grid" style="margin-bottom:6px;">
+      ${shown.map(c => `<button class="cat-cell ${draft.category === c.id ? "on" : ""}" onclick="setCat('${c.id}')"><div class="e">${c.icon}</div><div class="n">${esc(c.name)}</div></button>`).join("")}
+    </div>
+    <button class="btn ghost" style="padding:8px; margin-bottom:8px;" onclick="toggleCats()">${expanded ? "Weniger Kategorien ▴" : "Alle Kategorien ▾"}</button>`;
+  })()}
 
   ${tripCountries(trip).length > 1 ? `<label class="field" style="margin-bottom:6px;"><span>Land</span></label>
   <div class="payer-row">
@@ -1472,6 +1486,8 @@ function key(k, el) {
 }
 function toggleRefund() { draft.sign = draft.sign === -1 ? 1 : -1; render(); }
 function setDraftDate(v) { draft.date = v || todayISO(); render(); }
+let catExpanded = false; /* category grid collapsed to top-8 by default */
+function toggleCats() { catExpanded = !catExpanded; render(); }
 
 /* ----- Optional location on an expense: one tap grabs the GPS position
    (works offline); the place name resolves via OpenStreetMap when online ----- */
@@ -1479,9 +1495,12 @@ function locRowHTML() {
   const l = draft && draft.location;
   const label = l && l.label ? l.label : "";
   const hasCoords = l && typeof l.lat === "number";
+  /* Google-Maps-style folded map + red pin, drawn inline (the real logo is
+     trademarked; this look-alike is ours) */
+  const MAP_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6 9 4v14l-6 2z" fill="#0F9D58"/><path d="M9 4l6 2v14l-6-2z" fill="#FFD84D"/><path d="M15 6l6-2v14l-6 2z" fill="#4285F4"/><path d="M17 1.5c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.2 4.5 8.2s4.5-4.8 4.5-8.2c0-2.5-2-4.5-4.5-4.5z" fill="#EA4335" stroke="#fff" stroke-width=".9"/><circle cx="17" cy="6" r="1.7" fill="#fff"/></svg>`;
   return `<input id="locInput" value="${esc(label)}" placeholder="z. B. Strandbar, Altstadt …"
       autocomplete="off" oninput="locInputChanged(this.value)" style="flex:1; min-width:0;">
-    ${hasCoords ? `<button class="icon-btn" style="flex:none;" onclick="openInMaps(${l.lat},${l.lon})" aria-label="Karte öffnen">🗺</button>
+    ${hasCoords ? `<button class="icon-btn" style="flex:none;" onclick="openInMaps(${l.lat},${l.lon})" aria-label="Karte öffnen">${MAP_ICON}</button>
     <button class="icon-btn" style="flex:none;" onclick="clearLocation()" aria-label="Ort entfernen">✕</button>` : ""}
     <button class="icon-btn" style="flex:none;" onclick="captureLocation()" aria-label="Standort erfassen">📍</button>`;
 }
