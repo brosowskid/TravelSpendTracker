@@ -1061,9 +1061,11 @@ function render() {
     case "trip-edit": app.innerHTML = viewTripEdit(); break;
     case "add-trip": app.innerHTML = viewAddTrip(); break;
     case "more": app.innerHTML = viewMore(); break;
+    case "map": app.innerHTML = viewMap(); break;
     default: app.innerHTML = viewHome();
   }
   renderNav();
+  if (view === "map") initMap();
   /* ongoing trip: start the scrollable chart at "today" (right end) */
   const sp = $('.spark.scroll[data-end]');
   if (sp) sp.scrollLeft = sp.scrollWidth;
@@ -1236,6 +1238,9 @@ function viewHome() {
     }).join("")}
     <div class="muted" style="margin-top:8px;">Antippen öffnet die gefilterte Ausgabenliste.</div>
   </div>` : `<div class="card empty"><div class="e">🧾</div>Noch keine Ausgaben.<br>Tippe auf <b>+</b>, um die erste zu erfassen.</div>`}
+
+  ${(trip.expenses || []).some(x => x.location && typeof x.location.lat === "number")
+    ? `<button class="btn secondary" style="margin-bottom:14px;" onclick="openMap()">🗺 Karte der Ausgabenorte</button>` : ""}
 
   ${(() => {
     /* multi-destination trips: where did the money go, by country */
@@ -1544,6 +1549,60 @@ async function resolvePlaceName() {
   } catch (e) { /* offline – Koordinaten bleiben, Name kommt ggf. beim Bearbeiten */ }
 }
 function openInMaps(lat, lon) { window.open("https://maps.google.com/?q=" + lat + "," + lon, "_blank"); }
+
+/* ----- Trip map: Leaflet + OpenStreetMap, lazy-loaded ONLY when the map
+   view opens — the core app stays dependency-free and offline-first ----- */
+let _leafletLoading = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (_leafletLoading) return _leafletLoading;
+  _leafletLoading = new Promise((resolve, reject) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(css);
+    const s = document.createElement("script");
+    s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    s.onload = resolve;
+    s.onerror = () => { _leafletLoading = null; reject(new Error("offline")); };
+    document.head.appendChild(s);
+  });
+  return _leafletLoading;
+}
+function openMap() { go("map", state.ui.view); }
+function viewMap() {
+  const trip = activeTrip();
+  return `
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+      <button class="icon-btn" onclick="goBack()" aria-label="Zurück" style="font-size:22px;">‹</button>
+      <div class="title">Karte</div>
+    </div>
+    <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
+  </div>
+  <div id="map" style="height:calc(100vh - 210px); border-radius:var(--radius); box-shadow:var(--shadow); background:var(--card);"></div>
+  <div class="muted" style="text-align:center; margin-top:8px;">Marker antippen für Details · Karten: © OpenStreetMap</div>`;
+}
+async function initMap() {
+  const el = $("#map");
+  if (!el) return;
+  try { await loadLeaflet(); } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="e">🗺</div>Die Karte braucht eine Internetverbindung.</div>';
+    return;
+  }
+  const trip = activeTrip();
+  const pts = (trip.expenses || []).filter(x => x.location && typeof x.location.lat === "number");
+  const map = L.map(el);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+  const bounds = [];
+  for (const x of pts) {
+    const c = catById(x.category);
+    L.marker([x.location.lat, x.location.lon]).addTo(map)
+      .bindPopup(`${c.icon} ${esc(x.note || c.name)}<br><b>${fmt(x.amountHome)}</b> · ${dateLabel(x.date)}${x.location.label ? "<br>📍 " + esc(x.location.label) : ""}`);
+    bounds.push([x.location.lat, x.location.lon]);
+  }
+  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+  else map.setView([20, 0], 2);
+}
 function setDraftCountry(n) { draft.country = n; render(); }
 function setCur(c) {
   draft.currency = c;
