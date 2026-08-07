@@ -1159,7 +1159,6 @@ function viewHome() {
   <div class="topbar">
     <div style="display:flex; align-items:center; gap:10px; min-width:0;">${backBtnHTML()}<div class="title">Übersicht</div></div>
     <div style="display:flex; align-items:center; gap:8px;">
-      <button class="icon-btn" onclick="openMapMaybe()" aria-label="Karte">${MAP_ICON}</button>
       <button class="trip-chip" onclick="go('trips')">${esc(trip.name)} ▾</button>
       <button class="icon-btn" onclick="openSettings()" aria-label="Einstellungen">⚙️</button>
     </div>
@@ -1226,6 +1225,12 @@ function viewHome() {
     </div>
     ${spark.length > 20 ? '<div class="muted" style="font-size:11px; text-align:center; margin-top:6px;">← wischen · Balken antippen für Details</div>' : ""}
   </div>
+
+  ${hasCoordsIn(trip.expenses) ? `<div class="card" style="display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer;" onclick="openMapMaybe()">
+    <span style="flex:none; display:flex;">${MAP_ICON}</span>
+    <div style="flex:1; font-weight:650;">Karte dieser Reise</div>
+    <span class="muted" style="font-size:18px;">›</span>
+  </div>` : ""}
 
   ${cats.length ? `<div class="card">
     <div class="h2">Nach Kategorie</div>
