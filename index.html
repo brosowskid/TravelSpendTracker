@@ -1640,9 +1640,10 @@ function viewAdd() {
   /* multi-destination trips: every destination's currency gets a chip */
   const destCurs = tripCountries(trip).map(c => c.cur);
   const curs = [...new Set([trip.currency, draft.currency, last && last.currency, ...destCurs, state.homeCurrency, "EUR", "USD"])].filter(Boolean).slice(0, 5);
-  /* UX 2.0 order: amount → category → note → date, everything rarer behind
-     "Mehr Details" — the 5-second core flow stays amount → category → save */
-  const details = addDetailsOpen || !!(draft.location || draft.sign === -1);
+  /* UX 2.0 order: amount → category → location → note → date, everything
+     rarer behind "Mehr Details" — the 5-second core flow stays
+     amount → category → save (owner: Ort direkt nach der Kategorie) */
+  const details = addDetailsOpen || draft.sign === -1;
   return `
   <div class="topbar">
     <button class="pill-btn" style="flex:none;" onclick="cancelAdd()">${tr("Abbrechen")}</button>
@@ -1674,6 +1675,9 @@ function viewAdd() {
     <button class="btn ghost" style="padding:8px; margin-bottom:8px;" onclick="toggleCats()">${tr(expanded ? "Weniger Kategorien ▴" : "Alle Kategorien ▾")}</button>`;
   })()}
 
+  <div class="muted" style="font-weight:600; margin:2px 2px 8px;">${tr("Ort (optional)")}</div>
+  <div class="payer-row" id="locRow" style="flex-wrap:nowrap; align-items:center;">${locRowHTML()}</div>
+
   ${tripTravelers(trip).length > 1 ? `<div class="muted" style="font-weight:600; margin:2px 2px 8px;">${tr("Bezahlt von")}</div>
   <div class="payer-row">
     ${tripTravelers(trip).map(p => `<button class="chip ${draft.payer === p ? "on" : ""}" onclick="setPayer('${esc(p)}')">${esc(p)}</button>`).join("")}
@@ -1692,9 +1696,6 @@ function viewAdd() {
 
   <button class="btn ghost" style="padding:8px; margin-bottom:8px;" onclick="toggleAddDetails()">${tr(details ? "Weniger Details ▴" : "Mehr Details ▾")}</button>
   ${details ? `
-  <div class="muted" style="font-weight:600; margin:2px 2px 8px;">${tr("Ort (optional)")}</div>
-  <div class="payer-row" id="locRow" style="flex-wrap:nowrap; align-items:center;">${locRowHTML()}</div>
-
   ${tripCountries(trip).length > 1 ? `<div class="muted" style="font-weight:600; margin:2px 2px 8px;">${tr("Land")}</div>
   <div class="payer-row">
     ${tripCountries(trip).map(c => `<button class="chip ${draft.country === c.name ? "on" : ""}" onclick="setDraftCountry('${esc(c.name)}')">${countryFlag(c.name)}${esc(countryDisplay(c.name))}</button>`).join("")}
@@ -1709,7 +1710,7 @@ function viewAdd() {
   ${editingExpenseId ? `<button class="btn danger" style="margin-top:4px;" onclick="deleteExpense()">${tr("Ausgabe löschen")}</button>` : ""}`;
 }
 let addDetailsOpen = false; /* "Mehr Details" section; auto-opens when the
-  expense already carries a location or refund so nothing hides silently */
+  expense already carries a refund so nothing hides silently */
 function toggleAddDetails() { addDetailsOpen = !addDetailsOpen; render(); }
 function cancelAdd() {
   const wasEditing = !!editingExpenseId;

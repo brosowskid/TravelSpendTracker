@@ -97,13 +97,13 @@ async function seed(page) {
   check("Buttons Cancel/Add", (await page.locator('button:has-text("Cancel")').count()) === 1
     && (await page.locator('button:has-text("Add")').count()) >= 1);
   check("Details zu: kein Refund-Chip sichtbar", (await page.locator("text=Refund").count()) === 0);
+  check("Ort immer sichtbar (Kernflow)", (await page.locator("text=Location (optional)").count()) === 1);
   const addBody = await page.locator("#app").innerText();
-  const order = ["Category", "Note", "Date", "More details"].map(s => addBody.indexOf(s));
-  check("Reihenfolge Kategorie -> Notiz -> Datum -> More details", order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), order);
+  const order = ["Category", "Location", "Note", "Date", "More details"].map(s => addBody.indexOf(s));
+  check("Reihenfolge Kategorie -> Ort -> Notiz -> Datum -> More details", order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), order);
   await page.click("text=More details");
   await page.waitForTimeout(150);
-  check("Details offen: Refund-Chip + Ort", (await page.locator("text=Refund").count()) === 1
-    && (await page.locator("text=Location (optional)").count()) === 1);
+  check("Details offen: Refund-Chip", (await page.locator("text=Refund").count()) === 1);
   check("Land-Chips zeigen englische Namen", (await page.locator('.chip:has-text("Mexico")').count()) >= 1);
   await page.click("text=Refund");
   await page.waitForTimeout(150);
