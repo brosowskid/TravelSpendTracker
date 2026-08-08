@@ -192,22 +192,30 @@
   /* ---------- Bottom nav ---------- */
   .nav {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-    background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border-top: 1px solid var(--line);
     padding: 8px 8px calc(8px + var(--safe-bottom));
   }
-  .nav .inner { max-width: 520px; margin: 0 auto; display: flex; align-items: center; }
+  /* the bar's surface lives on ::before so the cradle-notch mask (owner
+     reference design) can carve the top edge WITHOUT clipping the raised
+     FAB, which is a child of .nav and pokes through the dip */
+  .nav::before {
+    content: ""; position: absolute; inset: 0; z-index: 0;
+    background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+    -webkit-mask: radial-gradient(circle 38px at 50% 0, transparent 37px, #000 37.5px);
+    mask: radial-gradient(circle 38px at 50% 0, transparent 37px, #000 37.5px);
+  }
+  .nav .inner { max-width: 520px; margin: 0 auto; display: flex; align-items: center; position: relative; z-index: 1; }
   .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; color: var(--muted); font-size: 10.5px; font-weight: 600; }
   /* active tab: soft pill around the icon so the current view is obvious */
   .nav-btn .i { font-size: 21px; line-height: 1; padding: 3px 14px; border-radius: 999px; }
   .nav-btn.on { color: var(--accent-deep); font-weight: 800; }
   .nav-btn.on .i { background: var(--accent); background: color-mix(in srgb, var(--accent) 55%, var(--card)); box-shadow: 0 2px 6px rgba(13,148,136,.25); }
   .fab {
-    flex: none; width: 58px; height: 58px; margin: -34px 6px 0; border-radius: 50%;
+    flex: none; width: 58px; height: 58px; margin: -36px 6px 0; border-radius: 50%;
     background: var(--accent); color: var(--on-accent); font-size: 30px; font-weight: 500;
-    /* raised out of the nav with a nav-colored ring — reads as a cradle
-       notch (owner-supplied reference); drop shadow keeps the float */
-    box-shadow: 0 0 0 5px var(--nav-bg), 0 6px 18px rgba(13,148,136,.4);
+    /* floats in the nav's mask-carved notch; the mask would clip the button,
+       so it escapes the masked layer via its own stacking position */
+    box-shadow: 0 6px 18px rgba(13,148,136,.4);
     display: flex; align-items: center; justify-content: center;
     /* the "+" glyph sits low in its em box — flex centers the box, not the
        ink; measured 3px offset, compensated here so the plus is dead center */
@@ -364,7 +372,6 @@ const EN = {
   "Kennzahlen": "Key figures", "Tage mit Ausgaben": "days with expenses",
   "Zahlung": "Payment", "Zahlung (optional)": "Payment (optional)",
   "Ø pro Tag vor Ort": "Ø per day on location", "Ø pro Ausgabe": "Ø per expense",
-  "größte": "largest", "kleinste": "smallest",
   "Eigene": "Custom", "Eigene Kategorie": "Custom category", "Eigene Kategorien": "Custom categories",
   "Name": "Name", "Symbol": "Icon", "z. B. Tauchen": "e.g. Diving",
   "Kategorie anlegen": "Create category", "Gibt es schon": "Already exists",
@@ -2185,9 +2192,6 @@ function viewSummary() {
   const flags = tripCountries(t).map(c => countryFlag(c.name)).join("").trim();
   const st = tripStatus(t);
   const activeDays = new Set(exps.filter(e => !t.startDate || e.date >= t.startDate).map(e => e.date)).size;
-  const positives = exps.filter(e => e.amountHome > 0);
-  const biggest = positives.length ? positives.reduce((a, b) => a.amountHome > b.amountHome ? a : b) : null;
-  const smallest = positives.length ? positives.reduce((a, b) => a.amountHome < b.amountHome ? a : b) : null;
   const cats = byCategory(t).filter(([, s]) => s > 0);
   const catSum = cats.reduce((s, [, x]) => s + x, 0);
   const countries = byCountry(t);
@@ -2205,7 +2209,7 @@ function viewSummary() {
   <div class="card trip-card">
     <div class="trip-hero" style="background:${tripGrad(t.id)};">
       ${flags ? `<div class="fl">${flags}</div>` : ""}
-      ${st.key !== "done" ? `<div class="st">${st.label}</div>` : ""}
+      <div class="st">${st.label}</div>
       <div class="nm">${esc(t.name)}</div>
       <div class="dt">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") + " · " : ""}${days === 1 ? tr("1 Tag") : tr("{n} Tage", { n: days })}</div>
     </div>
@@ -2225,8 +2229,6 @@ function viewSummary() {
       ${kpi(activeDays, tr("Tage mit Ausgaben"))}
       ${kpi(fmtShort(days ? (total - pre) / days : 0), tr("Ø pro Tag vor Ort"))}
       ${kpi(fmtShort(exps.length ? total / exps.length : 0), tr("Ø pro Ausgabe"))}
-      ${biggest ? kpi(fmtShort(biggest.amountHome), tr("größte") + ": " + esc((biggest.note || tr(catById(biggest.category).name)).slice(0, 22))) : ""}
-      ${smallest ? kpi(fmtShort(smallest.amountHome), tr("kleinste") + ": " + esc((smallest.note || tr(catById(smallest.category).name)).slice(0, 22))) : ""}
       ${pre > 0 ? kpi(fmtShort(pre), tr("vorab gebucht ({p} % der Kosten)", { p: total ? Math.round(pre / total * 100) : 0 })) : ""}
     </div>
   </div>
