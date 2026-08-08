@@ -201,8 +201,10 @@
     content: ""; position: absolute; inset: 0; z-index: 0;
     background: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     border-top: 1px solid var(--line);
-    -webkit-mask: radial-gradient(circle 38px at 50% 0, transparent 37px, #000 37.5px);
-    mask: radial-gradient(circle 38px at 50% 0, transparent 37px, #000 37.5px);
+    /* notch circle is CONCENTRIC with the FAB (center ≈ 1px below bar top,
+       see .fab margin math) → uniform 7px air gap all around the button */
+    -webkit-mask: radial-gradient(circle 37px at 50% 1px, transparent 36px, #000 36.5px);
+    mask: radial-gradient(circle 37px at 50% 1px, transparent 36px, #000 36.5px);
   }
   .nav .inner { max-width: 520px; margin: 0 auto; display: flex; align-items: center; position: relative; z-index: 1; }
   .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; color: var(--muted); font-size: 10.5px; font-weight: 600; }
@@ -211,15 +213,14 @@
   .nav-btn.on { color: var(--accent-deep); font-weight: 800; }
   .nav-btn.on .i { background: var(--accent); background: color-mix(in srgb, var(--accent) 55%, var(--card)); box-shadow: 0 2px 6px rgba(13,148,136,.25); }
   .fab {
+    /* margin-top -36 + 8px nav padding → button top at −28px, center at
+       +1px below bar top — must match the mask circle center in .nav::before */
     flex: none; width: 58px; height: 58px; margin: -36px 6px 0; border-radius: 50%;
-    background: var(--accent); color: var(--on-accent); font-size: 30px; font-weight: 500;
-    /* floats in the nav's mask-carved notch; the mask would clip the button,
-       so it escapes the masked layer via its own stacking position */
+    background: var(--accent); color: var(--on-accent);
+    /* the + is an SVG (crisp, perfectly centered — the old text glyph needed
+       a measured padding hack); floats in the mask-carved notch */
     box-shadow: 0 6px 18px rgba(13,148,136,.4);
     display: flex; align-items: center; justify-content: center;
-    /* the "+" glyph sits low in its em box — flex centers the box, not the
-       ink; measured 3px offset, compensated here so the plus is dead center */
-    padding-bottom: 6px;
   }
   .fab:active { background: var(--accent-deep); }
 
@@ -352,6 +353,8 @@ const EN = {
   "Gleichmäßige Aufteilung auf {n} Personen.": "Split equally between {n} people.",
   "Kurse: aktuell ({d})": "Rates: live ({d})", "Kurse: Offline-Fallback": "Rates: offline fallback",
   "Daten nur auf diesem Gerät": "data stays on this device",
+  "Cloud-Backup aktiv": "cloud backup on", "Reisedaten lokal gespeichert": "trip data stored locally",
+  "Deine Reisedaten werden lokal auf diesem Gerät gespeichert. Sichere sie regelmäßig als JSON-Datei.": "Your trip data is stored locally on this device. Back it up regularly as a JSON file.",
   "Dein letztes Backup ist über 2 Wochen her.": "Your last backup is over 2 weeks old.",
   "Noch kein Backup erstellt.": "No backup yet.", "Sichere deine Daten.": "Back up your data.",
   "Backup": "Back up", "Später": "Later",
@@ -365,7 +368,7 @@ const EN = {
   "Neue Ausgabe": "New expense", "Ausgabe bearbeiten": "Edit expense",
   "Abbrechen": "Cancel", "Hinzufügen": "Add", "Speichern": "Save",
   "↩ Erstattung": "↩ Refund", "Erstattung": "Refund",
-  "Aktiv": "Active", "läuft": "ongoing", "abgeschlossen": "completed",
+  "Aktuell & geplant": "Current & planned", "läuft": "ongoing", "abgeschlossen": "completed",
   "Reise-Zusammenfassung": "Trip summary", "Zusammenfassung": "Summary",
   "Gesamt ausgegeben": "Total spent", "im Budget · {x} übrig": "within budget · {x} left",
   "über Budget · +{x}": "over budget · +{x}", "von {b} Budget": "of {b} budget",
@@ -1045,9 +1048,12 @@ function tripPreTotal(trip) {
   if (!trip.startDate) return 0;
   return (trip.expenses || []).filter(e => e.date < trip.startDate).reduce((s, e) => s + e.amountHome, 0);
 }
+/* Ids of deleted custom categories collapse into "sonstiges" — otherwise
+   every orphaned id would render as its own separate "Sonstiges" row. */
+function normCatId(id) { return allCats().some(c => c.id === id) ? id : "sonstiges"; }
 function byCategory(trip) {
   const m = {};
-  for (const e of trip.expenses || []) m[e.category] = (m[e.category] || 0) + e.amountHome;
+  for (const e of trip.expenses || []) { const k = normCatId(e.category); m[k] = (m[k] || 0) + e.amountHome; }
   return Object.entries(m).sort((a, b) => b[1] - a[1]);
 }
 /* Per-country sums for multi-destination trips; "—" = no country recorded. */
@@ -1391,7 +1397,7 @@ function renderNav() {
   $("#navInner").innerHTML = `
     <button class="nav-btn ${v === "trips" || v === "add-trip" || v === "trip-edit" ? "on" : ""}" onclick="go('trips')"><span class="i">🌍</span>${tr("Reisen")}</button>
     <button class="nav-btn ${v === "stats" ? "on" : ""}" onclick="go('stats')"><span class="i">📈</span>${tr("Statistik")}</button>
-    <button class="fab" onclick="startAdd()">+</button>
+    <button class="fab" onclick="startAdd()" aria-label="${tr("Neue Ausgabe")}"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
     <button class="nav-btn ${v === "home" ? "on" : ""}" onclick="go('home')"><span class="i">📊</span>${tr("Übersicht")}</button>
     <button class="nav-btn ${v === "expenses" ? "on" : ""}" onclick="go('expenses')"><span class="i">🧾</span>${tr("Ausgaben")}</button>`;
   /* "Mehr" (export, backup, theme, home currency) lives in the ⚙️ topbar
@@ -1580,29 +1586,38 @@ function viewHome() {
       <div class="cat-amt">${fmtShort(sum)}</div></div>`).join("") + `<div class="muted" style="margin-top:8px;">${tr("Antippen öffnet die gefilterte Ausgabenliste.")}</div></div>`;
   })()}
 
-  ${showSplit ? `<div class="card">
+  ${showSplit ? (() => {
+    /* union of current travelers AND everyone recorded as payer — a person
+       removed from the trip must not silently vanish from the money view */
+    const people = [...new Set([...travelers, ...Object.keys(payers)])];
+    const fair = total / people.length;
+    return `<div class="card">
     <div class="h2">${tr("Wer hat bezahlt?")}</div>
-    ${travelers.map(p => {
+    ${people.map(p => {
       const paid = payers[p] || 0;
-      const fair = total / travelers.length;
       const diff = paid - fair;
       return `<div class="list-item"><div><b>${esc(p)}</b><div class="muted">${diff >= 0 ? tr("bekommt {x}", { x: fmt(diff) }) : tr("schuldet {x}", { x: fmt(-diff) })}</div></div><div style="font-weight:750">${fmt(paid)}</div></div>`;
     }).join("")}
-    <div class="muted" style="margin-top:8px;">${tr("Gleichmäßige Aufteilung auf {n} Personen.", { n: travelers.length })}</div>
-  </div>` : ""}
+    <div class="muted" style="margin-top:8px;">${tr("Gleichmäßige Aufteilung auf {n} Personen.", { n: people.length })}</div>
+  </div>`;
+  })() : ""}
 
-  <div class="offline-note">${state.rates.source === "live" ? tr("Kurse: aktuell ({d})", { d: esc(String(state.rates.date).slice(0, 16)) }) : tr("Kurse: Offline-Fallback")} · ${tr("Daten nur auf diesem Gerät")}</div>`;
+  <div class="offline-note">${state.rates.source === "live" ? tr("Kurse: aktuell ({d})", { d: esc(String(state.rates.date).slice(0, 16)) }) : tr("Kurse: Offline-Fallback")} · ${cloudCfg().url ? tr("Cloud-Backup aktiv") : tr("Reisedaten lokal gespeichert")}</div>`;
 }
 
 /* ----- Expense list ----- */
 let expFilter = { q: "", cat: null, country: null }; /* transient; reset on trip switch */
 function expenseMatches(e) {
-  if (expFilter.cat && e.category !== expFilter.cat) return false;
+  if (expFilter.cat && normCatId(e.category) !== expFilter.cat) return false;
   if (expFilter.country && (e.country || null) !== expFilter.country) return false;
   const q = expFilter.q.trim().toLowerCase();
   if (!q) return true;
+  /* search hits the DISPLAYED category name (translated) plus the German
+     source name, and the location label */
   return (e.note || "").toLowerCase().includes(q)
     || catById(e.category).name.toLowerCase().includes(q)
+    || tr(catById(e.category).name).toLowerCase().includes(q)
+    || (e.location && e.location.label || "").toLowerCase().includes(q)
     || (e.payer || "").toLowerCase().includes(q);
 }
 function expListHTML(trip) {
@@ -2107,9 +2122,19 @@ const TRIP_GRADS = [["#14b8a6", "#0f766e"], ["#6366f1", "#4338ca"], ["#ec4899", 
   ["#f59e0b", "#b45309"], ["#0ea5e9", "#0369a1"], ["#8b5cf6", "#6d28d9"],
   ["#10b981", "#047857"], ["#f43f5e", "#be123c"]];
 function tripGrad(id) {
-  let h = 0;
-  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const [a, b] = TRIP_GRADS[h % TRIP_GRADS.length];
+  /* deterministic (id hash), but neighbors in the list must differ: the map
+     walks the display order and bumps hash collisions to the next palette
+     slot — the same map serves list AND summary, so colors always agree */
+  const sorted = state.trips.slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""));
+  const hash = (s) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % TRIP_GRADS.length; };
+  let prev = -1;
+  for (const t of sorted) {
+    let g = hash(t.id);
+    if (g === prev) g = (g + 1) % TRIP_GRADS.length;
+    prev = g;
+    if (t.id === id) { const [a, b] = TRIP_GRADS[g]; return `linear-gradient(135deg, ${a}, ${b})`; }
+  }
+  const [a, b] = TRIP_GRADS[hash(id)];
   return `linear-gradient(135deg, ${a}, ${b})`;
 }
 function tripStatus(t) {
@@ -2121,7 +2146,7 @@ function tripStatus(t) {
   if (!t.endDate || t.endDate >= today) return { key: "run", label: tr("läuft") };
   return { key: "done", label: tr("abgeschlossen") };
 }
-function tripCardHTML(t, { showStatus } = {}) {
+function tripCardHTML(t) {
   const D = (iso) => iso ? Number(iso.slice(8, 10)) + "." + Number(iso.slice(5, 7)) + "." : "";
   const total = tripTotal(t);
   const days = tripDays(t);
@@ -2132,7 +2157,7 @@ function tripCardHTML(t, { showStatus } = {}) {
     <div class="card trip-card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
       <div class="trip-hero" style="background:${tripGrad(t.id)};">
         ${flags ? `<div class="fl">${flags}</div>` : ""}
-        ${showStatus && st.key !== "done" ? `<div class="st">${st.label}</div>` : ""}
+        <div class="st">${st.label}</div>
         <div class="nm">${esc(t.name)}</div>
         <div class="dt">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") + " · " : ""}${days === 1 ? tr("1 Tag") : tr("{n} Tage", { n: days })}</div>
       </div>
@@ -2164,14 +2189,14 @@ function viewTrips() {
     const done = sorted.filter(t => tripStatus(t).key === "done");
     let out = "";
     if (active.length) {
-      out += `<div class="day-head"><span>${tr("Aktiv")}</span></div>`;
-      out += active.map(t => tripCardHTML(t, { showStatus: true })).join("");
+      out += `<div class="day-head"><span>${tr("Aktuell & geplant")}</span></div>`;
+      out += active.map(t => tripCardHTML(t)).join("");
     }
     let year = null;
     for (const t of done) {
       const y = (t.startDate || "").slice(0, 4);
       if (y !== year) { year = y; out += `<div class="day-head"><span>${y}</span></div>`; }
-      out += tripCardHTML(t, {});
+      out += tripCardHTML(t);
     }
     return out;
   })()}
@@ -2209,7 +2234,6 @@ function viewSummary() {
   <div class="card trip-card">
     <div class="trip-hero" style="background:${tripGrad(t.id)};">
       ${flags ? `<div class="fl">${flags}</div>` : ""}
-      <div class="st">${st.label}</div>
       <div class="nm">${esc(t.name)}</div>
       <div class="dt">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") + " · " : ""}${days === 1 ? tr("1 Tag") : tr("{n} Tage", { n: days })}</div>
     </div>
@@ -2253,9 +2277,9 @@ function viewSummary() {
     ${countries.map(([n, s]) => `<div class="list-item"><b>${n === "—" ? tr("ohne Angabe") : countryFlag(n) + esc(countryDisplay(n))}</b><div style="font-weight:750;">${fmtShort(s)}</div></div>`).join("")}
   </div>` : ""}
 
-  ${travelers.length > 1 ? `<div class="card">
+  ${travelers.length > 1 || Object.keys(payers).some(p => !travelers.includes(p)) ? `<div class="card">
     <div class="h2">${tr("Wer hat bezahlt?")}</div>
-    ${travelers.map(p => `<div class="list-item"><b>${esc(p)}</b><div style="font-weight:750;">${fmtShort(payers[p] || 0)}</div></div>`).join("")}
+    ${[...new Set([...travelers, ...Object.keys(payers)])].map(p => `<div class="list-item"><b>${esc(p)}</b><div style="font-weight:750;">${fmtShort(payers[p] || 0)}</div></div>`).join("")}
   </div>` : ""}`;
 }
 
@@ -2371,7 +2395,7 @@ function viewTripEdit() {
       <input value="${esc(t.name)}" onchange="updateTripName(this.value)"></label>
     <label class="field"><span>${tr("Reiseziele (Währungen erscheinen als Chips bei der Eingabe)")}</span></label>
     ${tripCountries(t).map((c, i) => `<div class="list-item"><b>${countryFlag(c.name)}${esc(countryDisplay(c.name))} (${esc(c.cur)})</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="removeTripCountry(${i})">${tr("Entfernen")}</button></div>`).join("")}
-    <button class="btn ghost" onclick="openCountrySheet('edit')" style="margin-bottom:12px;"></button>
+    <button class="btn ghost" onclick="openCountrySheet('edit')" style="margin-bottom:12px;">${tr("+ Reiseziel hinzufügen")}</button>
     <label class="field"><span>${tr("Standard-Währung für neue Ausgaben")}</span>
       <button type="button" class="select-btn" onclick="openCurSheet('trip')">${curFlag(t.currency || state.homeCurrency)}${esc(t.currency || state.homeCurrency)} – ${esc(curName(t.currency || state.homeCurrency))} &nbsp;▾</button></label>
     <label class="field"><span>${tr("Budget ({c}, 0 = kein Budget)", { c: esc(state.homeCurrency) })}</span>
@@ -2478,7 +2502,7 @@ function viewMore() {
 
   <div class="card">
     <div class="h2">💾 Backup</div>
-    <p class="muted" style="margin-bottom:12px;">${tr("Deine Daten liegen nur auf diesem Gerät. Sichere sie regelmäßig als JSON-Datei.")}</p>
+    <p class="muted" style="margin-bottom:12px;">${tr("Deine Reisedaten werden lokal auf diesem Gerät gespeichert. Sichere sie regelmäßig als JSON-Datei.")}</p>
     <div style="display:grid; gap:8px;">
       <button class="btn secondary" onclick="exportBackup()">${tr("Backup erstellen (JSON)")}</button>
       <button class="btn ghost" onclick="document.getElementById('importFile').click()">${tr("Backup wiederherstellen")}</button>

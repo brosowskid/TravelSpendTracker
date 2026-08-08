@@ -288,7 +288,7 @@ await page.evaluate(() => {
 await page.waitForTimeout(250);
 check("Hero-Karten mit Verlauf", (await page.locator(".trip-hero").count()) === 3);
 const heads = await page.evaluate(() => [...document.querySelectorAll(".day-head")].map(h => h.innerText.trim()));
-check("Gruppen Aktiv + Jahr", heads[0].toLowerCase() === "aktiv" && heads.includes("2024"), heads); /* day-head uppercases via CSS */
+check("Gruppen Aktuell-und-geplant + Jahr", heads[0].toLowerCase().startsWith("aktuell") && heads.includes("2024"), heads); /* day-head uppercases via CSS */
 const pills = await page.evaluate(() => [...document.querySelectorAll(".trip-hero .st")].map(p => p.innerText));
 check("Status-Pills läuft + in N Tagen", pills.some(p => p === "läuft") && pills.some(p => p.startsWith("in ")), pills);
 check("Budget-Balken auf Karte", (await page.locator(".trip-card .tbar").count()) === 1);
@@ -331,6 +331,36 @@ check("CSV-Spalte Zahlung + Wert Bar", payCsv.split("\r\n")[0].includes(";Zahlun
 await page.evaluate(() => go("expenses"));
 await page.waitForTimeout(150);
 check("💵-Icon in der Liste", (await page.locator("#expList").innerText()).includes("💵"));
+
+/* 14. data-integrity fixes (GPT review round) */
+await page.evaluate(() => { editTrip("tRun"); });
+await page.waitForTimeout(150);
+check("Reiseziel-Button hat Text", (await page.locator('button:has-text("+ Reiseziel hinzufügen")').count()) >= 1);
+const orphan = await page.evaluate(() => {
+  /* two orphaned custom-category ids must merge into ONE Sonstiges row */
+  const t = state.trips.find(x => x.id === "tRun");
+  t.expenses.push(
+    { id: "or1", ts: new Date().toISOString(), date: todayISO(), amount: 5, currency: "EUR", amountHome: 5, rate: 1, rateSource: "live", category: "cust_gone1", note: "", payer: "Ich" },
+    { id: "or2", ts: new Date().toISOString(), date: todayISO(), amount: 7, currency: "EUR", amountHome: 7, rate: 1, rateSource: "live", category: "cust_gone2", note: "", payer: "Ich" });
+  const rows = byCategory(t).filter(([cid]) => cid === "sonstiges");
+  return { rows: rows.length, sum: rows.length ? rows[0][1] : 0 };
+});
+check("Verwaiste Kategorien → EINE Sonstiges-Zeile", orphan.rows === 1 && orphan.sum === 12, orphan);
+const orphanPayer = await page.evaluate(() => {
+  const t = state.trips.find(x => x.id === "tRun");
+  t.expenses.push({ id: "op1", ts: new Date().toISOString(), date: todayISO(), amount: 40, currency: "EUR", amountHome: 40, rate: 1, rateSource: "live", category: "essen", note: "", payer: "Entfernte Anna" });
+  state.activeTripId = "tRun"; saveState(); go("home");
+  return document.getElementById("app").innerText.includes("Entfernte Anna");
+});
+check("Entfernte Zahlerin bleibt in Wer-hat-bezahlt sichtbar", orphanPayer === true);
+check("Suche findet Ortslabel", await page.evaluate(() => {
+  const t = state.trips.find(x => x.id === "tRun");
+  t.expenses.push({ id: "loc1", ts: new Date().toISOString(), date: todayISO(), amount: 3, currency: "EUR", amountHome: 3, rate: 1, rateSource: "live", category: "essen", note: "", payer: "Ich", location: { lat: 1, lon: 2, label: "Strandbar Xyz" } });
+  expFilter = { q: "strandbar", cat: null, country: null };
+  const hit = t.expenses.filter(expenseMatches).length === 1;
+  expFilter = { q: "", cat: null, country: null };
+  return hit;
+}));
 
 await page.evaluate(() => go("home"));
 await page.waitForTimeout(200);
