@@ -218,6 +218,49 @@ check("Ortssuche liefert Koordinaten + echten Namen", geo && Math.abs(geo.lat - 
 const csv = await page.evaluate(() => buildCSV(state.trips, true).split("\r\n")[0]);
 check("CSV-Spalte Land", csv.includes(";Land;"), csv);
 
+/* 11. custom categories */
+await page.evaluate(() => startAdd());
+await page.waitForTimeout(150);
+await page.click("text=Alle Kategorien");
+await page.waitForTimeout(150);
+check("+Eigene-Kachel im erweiterten Grid", (await page.locator('.cat-cell:has-text("Eigene")').count()) === 1);
+await page.click('.cat-cell:has-text("Eigene")');
+await page.waitForTimeout(200);
+await page.fill("#newCatName", "Tauchen");
+await page.click('#newCatEmojis [data-emoji="🎣"]');
+await page.click("text=Kategorie anlegen");
+await page.waitForTimeout(200);
+const custState = await page.evaluate(() => ({
+  cats: state.customCategories, drafted: draft.category,
+  inGrid: !!document.querySelector(".cat-cell.on") && document.querySelector(".cat-cell.on").innerText.includes("Tauchen"),
+}));
+check("Kategorie gespeichert + vorausgewählt", custState.cats.length === 1 && custState.cats[0].name === "Tauchen"
+  && custState.cats[0].icon === "🎣" && custState.drafted === custState.cats[0].id && custState.inGrid, custState);
+await page.evaluate(() => { amountTyped("30"); saveExpense(); });
+await page.waitForTimeout(150);
+const custCsv = await page.evaluate(() => buildCSV(state.trips, true));
+check("Eigene Kategorie im CSV", custCsv.includes("Tauchen"));
+const custId = await page.evaluate(() => state.customCategories[0].id);
+check("Duplikat-Name abgelehnt", await page.evaluate(() => {
+  const before = state.customCategories.length;
+  /* simulate: same name typed again */
+  openNewCatSheet(); document.getElementById("newCatName").value = "tauchen"; createCustomCategory();
+  const rejected = state.customCategories.length === before;
+  closeSheet(); return rejected;
+}));
+page.once("dialog", d => d.accept());
+await page.evaluate((id) => deleteCustomCategory(id), custId);
+await page.waitForTimeout(150);
+const afterDel = await page.evaluate((id) => ({
+  gone: !state.customCategories.some(c => c.id === id),
+  fallback: catById(id).name,
+  expenseKeepsId: state.trips.some(t => (t.expenses || []).some(e => e.category === id)),
+}), custId);
+check("Löschen: weg, Ausgabe behält id, Fallback Sonstiges", afterDel.gone && afterDel.fallback === "Sonstiges" && afterDel.expenseKeepsId, afterDel);
+/* merge import brings custom categories along */
+await page.evaluate(() => applyImport({ version: 3, homeCurrency: "EUR", trips: [], customCategories: [{ id: "cust_x1", name: "Golf", icon: "⚽" }] }, "merge"));
+check("Merge-Import übernimmt eigene Kategorien", await page.evaluate(() => state.customCategories.some(c => c.id === "cust_x1")));
+
 await page.evaluate(() => go("home"));
 await page.waitForTimeout(200);
 await page.screenshot({ path: "shot-v26-home.png" });

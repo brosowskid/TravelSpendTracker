@@ -343,7 +343,14 @@ const EN = {
   /* add screen */
   "Neue Ausgabe": "New expense", "Ausgabe bearbeiten": "Edit expense",
   "Abbrechen": "Cancel", "Hinzufügen": "Add", "Speichern": "Save",
-  "↩ Erstattung": "↩ Refund", "Erstattung": "Refund", "Datum": "Date", "Ort (optional)": "Location (optional)",
+  "↩ Erstattung": "↩ Refund", "Erstattung": "Refund",
+  "Eigene": "Custom", "Eigene Kategorie": "Custom category", "Eigene Kategorien": "Custom categories",
+  "Name": "Name", "Symbol": "Icon", "z. B. Tauchen": "e.g. Diving",
+  "Kategorie anlegen": "Create category", "Gibt es schon": "Already exists",
+  "Kategorie „{n}\" angelegt ✓": "Category “{n}” created ✓",
+  "Kategorie „{n}\" löschen? {x} Ausgaben behalten ihre Daten und erscheinen als „Sonstiges\".": "Delete category “{n}”? {x} expenses keep their data and show as “Other”.",
+  "Kategorie „{n}\" löschen?": "Delete category “{n}”?",
+  "Noch keine – beim Eintragen unter „Alle Kategorien\" über die Kachel „+ Eigene\" anlegen.": "None yet – create them while adding an expense, under “All categories” via the “+ Custom” tile.", "Datum": "Date", "Ort (optional)": "Location (optional)",
   "Kategorie": "Category", "Bezahlt von": "Paid by", "Notiz (optional)": "Note (optional)",
   "z. B. Strandbar, Altstadt …": "e.g. beach bar, old town …",
   "z. B. Tacos am Strand": "e.g. tacos on the beach",
@@ -568,6 +575,7 @@ function defaultState() {
     recentCurrencies: ["EUR", "USD"],
     rates: { base: "EUR", date: null, map: { ...FALLBACK_RATES }, source: "fallback" },
     settings: { theme: "auto" },
+    customCategories: [],      /* user-defined {id, name, icon}; ids never change */
     ui: { view: "home" },
     lastBackupAt: null,        /* ISO of the last JSON backup (drives the reminder) */
     backupSnoozedUntil: null,  /* ISO; "Später" on the reminder snoozes 7 days */
@@ -599,6 +607,7 @@ function migrateState(s) {
     if (!Array.isArray(t.travelers) || !t.travelers.length) t.travelers = ["Ich"];
     if (!Array.isArray(t.countries)) t.countries = [];
   }
+  if (!Array.isArray(s.customCategories)) s.customCategories = []; /* additive, pre-custom backups */
   return s;
 }
 
@@ -694,7 +703,8 @@ function dateLabel(iso) {
   if (dt.toDateString() === yd.toDateString()) return tr("Gestern");
   return dt.toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "short" });
 }
-function catById(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
+function allCats() { return CATEGORIES.concat(state.customCategories || []); }
+function catById(id) { return allCats().find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
 /* Fixed per-category colors for the dashboard donut + breakdown bars (the six
    most common categories; everything else renders muted gray). Validated with
    the dataviz palette checker on the light AND dark card surfaces — change
@@ -860,6 +870,52 @@ function pickCountry(i) {
   tripCountrySel.push({ name: n, cur: c });
   paintNewTripCountries();
   closeSheet();
+}
+
+/* ----- Custom category sheet (opened from the add screen's "+ Eigene" tile) ----- */
+const CAT_EMOJIS = ["🏷️", "🎫", "🎁", "🍺", "☕", "🍦", "🏖️", "🎿", "🥾", "🚤", "🎭", "🏛️", "💆", "🧺", "📷", "🎣", "⚽", "🎰", "🚿", "💊", "🐕", "👶", "🔧", "❓"];
+let newCatIcon = CAT_EMOJIS[0];
+function openNewCatSheet() {
+  newCatIcon = CAT_EMOJIS[0];
+  $("#sheetHost").innerHTML = `
+  <div class="overlay" onclick="if(event.target===this) closeSheet()">
+    <div class="sheet"><div class="sheet-handle"></div>
+      <div class="h2" style="margin-bottom:10px;">${tr("Eigene Kategorie")}</div>
+      <label class="field"><span>${tr("Name")}</span>
+        <input id="newCatName" placeholder="${tr("z. B. Tauchen")}" autocomplete="off" maxlength="24"></label>
+      <label class="field" style="margin-bottom:6px;"><span>${tr("Symbol")}</span></label>
+      <div id="newCatEmojis" style="display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; margin-bottom:14px;">
+        ${CAT_EMOJIS.map(e => `<button class="cat-cell" style="height:48px;" data-emoji="${e}" onclick="pickNewCatIcon('${e}')"><div class="e" style="font-size:22px;">${e}</div></button>`).join("")}
+      </div>
+      <button class="btn" onclick="createCustomCategory()">${tr("Kategorie anlegen")}</button>
+    </div></div>`;
+  paintNewCatIcon();
+}
+function paintNewCatIcon() {
+  for (const b of document.querySelectorAll("#newCatEmojis .cat-cell"))
+    b.classList.toggle("on", b.dataset.emoji === newCatIcon);
+}
+function pickNewCatIcon(e) { newCatIcon = e; paintNewCatIcon(); }
+function createCustomCategory() {
+  const name = ($("#newCatName").value || "").trim();
+  if (!name) { toast(tr("Bitte einen Namen eingeben")); return; }
+  if (allCats().some(c => c.name.toLowerCase() === name.toLowerCase())) { toast(tr("Gibt es schon")); return; }
+  const cat = { id: "cust_" + uid(), name, icon: newCatIcon };
+  state.customCategories.push(cat);
+  saveState();
+  if (draft) { draft.category = cat.id; catExpanded = true; }
+  closeSheet(); render();
+  toast(tr("Kategorie „{n}\" angelegt ✓", { n: name }));
+}
+function deleteCustomCategory(id) {
+  const cat = (state.customCategories || []).find(c => c.id === id);
+  if (!cat) return;
+  const used = state.trips.reduce((s, t) => s + (t.expenses || []).filter(e => e.category === id).length, 0);
+  if (!confirm(used
+    ? tr("Kategorie „{n}\" löschen? {x} Ausgaben behalten ihre Daten und erscheinen als „Sonstiges\".", { n: cat.name, x: used })
+    : tr("Kategorie „{n}\" löschen?", { n: cat.name }))) return;
+  state.customCategories = state.customCategories.filter(c => c.id !== id);
+  saveState(); render();
 }
 
 function toast(msg) {
@@ -1249,6 +1305,9 @@ function applyImport(s, mode) {
     }
     state.trips.push(t); added++;
   }
+  /* bring the backup's custom categories along (union by id) */
+  for (const c of imp.customCategories || [])
+    if (!state.customCategories.some(x => x.id === c.id)) state.customCategories.push(c);
   if (!state.activeTripId && state.trips.length) state.activeTripId = state.trips[0].id;
   saveState(); render();
   toast((added === 1 ? tr("1 Reise hinzugefügt") : tr("{n} Reisen hinzugefügt", { n: added })) + (skipped ? tr(", {n} schon vorhanden", { n: skipped }) : "") + " ✓");
@@ -1671,12 +1730,13 @@ function viewAdd() {
        categories sit behind "Alle Kategorien" */
     const counts = {};
     for (const e of trip.expenses || []) counts[e.category] = (counts[e.category] || 0) + 1;
-    const ordered = CATEGORIES.slice().sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
+    const ordered = allCats().slice().sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0));
     const topIds = ordered.slice(0, 8).map(c => c.id);
     const expanded = catExpanded || (draft.category && !topIds.includes(draft.category));
-    const shown = expanded ? CATEGORIES : ordered.slice(0, 8);
+    const shown = expanded ? allCats() : ordered.slice(0, 8);
     return `<div class="cat-grid" style="margin-bottom:6px;">
       ${shown.map(c => `<button class="cat-cell ${draft.category === c.id ? "on" : ""}" onclick="setCat('${c.id}')"><div class="e">${c.icon}</div><div class="n">${esc(tr(c.name))}</div></button>`).join("")}
+      ${expanded ? `<button class="cat-cell" style="border:1.5px dashed var(--line); background:transparent; box-shadow:none;" onclick="openNewCatSheet()"><div class="e">＋</div><div class="n">${tr("Eigene")}</div></button>` : ""}
     </div>
     <button class="btn ghost" style="padding:8px; margin-bottom:8px;" onclick="toggleCats()">${tr(expanded ? "Weniger Kategorien ▴" : "Alle Kategorien ▾")}</button>`;
   })()}
@@ -2272,6 +2332,10 @@ function viewMore() {
     </div>
     <label class="field"><span>${tr("Heimatwährung")}</span>
       <button type="button" class="select-btn" onclick="openCurSheet('home')">${curFlag(state.homeCurrency)}${esc(state.homeCurrency)} – ${esc(curName(state.homeCurrency))} &nbsp;▾</button></label>
+    <label class="field"><span>${tr("Eigene Kategorien")}</span></label>
+    ${(state.customCategories || []).length
+      ? state.customCategories.map(c => `<div class="list-item"><b>${c.icon} ${esc(c.name)}</b><button class="btn ghost" style="width:auto;padding:4px 8px;" onclick="deleteCustomCategory('${c.id}')">${tr("Entfernen")}</button></div>`).join("")
+      : `<p class="muted" style="margin-top:-2px;">${tr("Noch keine – beim Eintragen unter „Alle Kategorien\" über die Kachel „+ Eigene\" anlegen.")}</p>`}
     <button class="btn ghost" onclick="refreshRates().then(()=>toast(tr(state.rates.source === 'live' ? 'Kurse: aktuell' : 'Kurse: Offline-Fallback')))">${tr("Wechselkurse aktualisieren")}</button>
     <div class="muted" style="text-align:center; margin-top:4px;">${tr(state.rates.source === "live" ? "Kurse: aktuell" : "Kurse: Offline-Fallback")}</div>
     <p class="muted" style="margin-top:10px;">${tr("Einstellungen zur einzelnen Reise (Budget, Datum, Reisende …) findest du unter Reisen → ✎.")}</p>
