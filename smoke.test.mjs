@@ -10,7 +10,7 @@ await new Promise(r => setTimeout(r, 800));
 /* cloud environments have a preinstalled Chromium; elsewhere use the one from `npx playwright install chromium` */
 const cloudChrome = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const browser = await chromium.launch(existsSync(cloudChrome) ? { executablePath: cloudChrome } : {});
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, locale: "de-DE" });
 const errors = [];
 page.on("pageerror", e => errors.push("PAGEERROR: " + e.message));
 page.on("console", m => { if (m.type() === "error") errors.push("CONSOLE: " + m.text()); });
@@ -41,7 +41,9 @@ await page.waitForTimeout(150);
 console.log("REMOVE DESTINATION:", (await page.locator("#tripCountryList").innerText()).includes("Guatemala") ? "FAIL" : "OK");
 console.log("FORM INTACT:", (await page.inputValue("#tripName")) === "Mexiko 2026" ? "OK" : "FAIL");
 await page.fill("#tripBudget", "3500");
-await page.fill("#tripEnd", "2026-08-19");
+// end date = today + 14 → KPI must say "noch 14 Tage", independent of the run date
+const endIso = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); });
+await page.fill("#tripEnd", endIso);
 await page.click("text=Reise anlegen");
 await page.waitForTimeout(300);
 const daysLeftKpi = await page.locator("text=noch 14 Tage").count();

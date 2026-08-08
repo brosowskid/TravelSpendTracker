@@ -10,7 +10,7 @@ const opts = {};
 const cloudChrome = "/opt/pw-browsers/chromium-1140/chrome-linux/chrome";
 if (existsSync(cloudChrome)) opts.executablePath = cloudChrome;
 const browser = await chromium.launch(opts);
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: "de-DE" });
 /* deterministic: no live rates — a late-arriving rate refresh would fire the
    one-time upgrade toast and wipe the undo toast under test */
 await page.route("**/open.er-api.com/**", r => r.abort());
@@ -64,8 +64,11 @@ check("frisches Backup = keine Erinnerung", await page.evaluate(() => backupDue(
 /* 2. Nach-Land card on home */
 check("Nach-Land-Karte", (await page.locator("text=Nach Land").count()) >= 1);
 
-/* 3. refund entry via UI */
+/* 3. refund entry via UI — the refund chip sits behind "Mehr Details" since the UX-2.0 add screen */
 await page.evaluate(() => startAdd());
+await page.waitForTimeout(150);
+check("Mehr-Details zu Beginn zu", (await page.locator("text=Erstattung").count()) === 0);
+await page.click("text=Mehr Details");
 await page.waitForTimeout(150);
 check("Erstattung-Chip da", (await page.locator("text=Erstattung").count()) === 1);
 check("Land-Chips im Add-Flow", await page.evaluate(() => !!draft.country));
@@ -86,6 +89,8 @@ await page.evaluate(() => cancelAdd());
 
 /* 5. move expense to another trip */
 await page.evaluate(() => { editExpense("e1"); });
+await page.waitForTimeout(150);
+await page.click("text=Mehr Details"); /* trip-move select lives in the details section */
 await page.waitForTimeout(150);
 check("Reise-Select im Edit", (await page.locator("select").count()) >= 1);
 await page.evaluate(() => { draft.tripId = "tB"; saveExpense(); });

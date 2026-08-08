@@ -6,7 +6,7 @@ const server = spawn(py, ["-m", "http.server", "8124"], { stdio: "ignore" });
 await new Promise(r => setTimeout(r, 1000));
 const cloudChrome = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const browser = await chromium.launch(existsSync(cloudChrome) ? { executablePath: cloudChrome } : {});
-const page = await browser.newPage();
+const page = await browser.newPage({ locale: "de-DE" });
 await page.goto("http://localhost:8124/index.html");
 await page.waitForTimeout(400);
 const result = await page.evaluate(() => {
