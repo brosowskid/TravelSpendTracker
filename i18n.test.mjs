@@ -96,18 +96,17 @@ async function seed(page) {
   check("Add-Titel: New expense", (await page.locator("text=New expense").count()) === 1);
   check("Buttons Cancel/Add", (await page.locator('button:has-text("Cancel")').count()) === 1
     && (await page.locator('button:has-text("Add")').count()) >= 1);
-  check("Details zu: kein Refund-Chip sichtbar", (await page.locator("text=Refund").count()) === 0);
+  check("±-Toggle im Betragsfeld (englisches aria-label)", (await page.locator('.amount-display button[aria-label="↩ Refund"]').count()) === 1);
   check("Ort immer sichtbar (Kernflow)", (await page.locator("text=Location (optional)").count()) === 1);
   const addBody = await page.locator("#app").innerText();
   const order = ["Category", "Location", "Note", "Date", "More details"].map(s => addBody.indexOf(s));
   check("Reihenfolge Kategorie -> Ort -> Notiz -> Datum -> More details", order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), order);
   await page.click("text=More details");
   await page.waitForTimeout(150);
-  check("Details offen: Refund-Chip", (await page.locator("text=Refund").count()) === 1);
   check("Land-Chips zeigen englische Namen", (await page.locator('.chip:has-text("Mexico")').count()) >= 1);
-  await page.click("text=Refund");
+  await page.click('.amount-display button[aria-label="↩ Refund"]');
   await page.waitForTimeout(150);
-  check("Refund-Zustand überlebt Re-Render (Details bleiben offen)", (await page.locator("text=Refund").count()) === 1);
+  check("Refund aktiv: roter − und Hinweis auf Englisch", (await page.locator("#convLine").innerText()).includes("Refund"));
   /* save a refund and read the toast */
   await page.evaluate(() => { amountTyped("50"); setCat("mietwagen"); });
   await page.evaluate(() => saveExpense());

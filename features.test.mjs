@@ -64,15 +64,14 @@ check("frisches Backup = keine Erinnerung", await page.evaluate(() => backupDue(
 /* 2. Nach-Land card on home */
 check("Nach-Land-Karte", (await page.locator("text=Nach Land").count()) >= 1);
 
-/* 3. refund entry via UI — the refund chip sits behind "Mehr Details" since the UX-2.0 add screen */
+/* 3. refund entry via the ± toggle in the amount field (UX 2.0) */
 await page.evaluate(() => startAdd());
 await page.waitForTimeout(150);
-check("Mehr-Details zu Beginn zu", (await page.locator("text=Erstattung").count()) === 0);
-await page.click("text=Mehr Details");
-await page.waitForTimeout(150);
-check("Erstattung-Chip da", (await page.locator("text=Erstattung").count()) === 1);
+check("±-Toggle im Betragsfeld", (await page.locator('.amount-display button[aria-label="↩ Erstattung"]').count()) === 1);
 check("Land-Chips im Add-Flow", await page.evaluate(() => !!draft.country));
-await page.click("text=Erstattung");
+await page.click('.amount-display button[aria-label="↩ Erstattung"]');
+await page.waitForTimeout(150);
+check("Erstattung-Hinweis unter dem Betrag", (await page.locator("#convLine").innerText()).includes("Erstattung"));
 await page.evaluate(() => { amountTyped("50"); setCat("mietwagen"); });
 const disp = await page.locator(".amount-display").innerText();
 check("Anzeige zeigt Minus", disp.includes("−"), disp);

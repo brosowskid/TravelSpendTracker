@@ -319,6 +319,7 @@ const EN = {
   "in {n} Tagen": "in {n} days", "in 1 Tag": "in 1 day", "Reisebeginn {d}": "trip starts {d}",
   "Ø pro Tag vor Ort ({d})": "Ø per day on site ({d})", "{n} Tage": "{n} days", "1 Tag": "1 day",
   "vorab gebucht ({p} % der Kosten)": "booked in advance ({p}% of costs)", "vorab gebucht": "booked in advance",
+  "vor": "pre",
   "letzter Tag": "last day", "noch {n} Tage": "{n} days left", "noch 1 Tag": "1 day left",
   "bis {d}": "until {d}", " · Ø {x}/Tag möglich": " · Ø {x}/day available",
   "Ausgaben-Verlauf": "Spending timeline", "Reisezeitraum: {r} · {d}": "Trip period: {r} · {d}",
@@ -342,7 +343,7 @@ const EN = {
   /* add screen */
   "Neue Ausgabe": "New expense", "Ausgabe bearbeiten": "Edit expense",
   "Abbrechen": "Cancel", "Hinzufügen": "Add", "Speichern": "Save",
-  "↩ Erstattung": "↩ Refund", "Datum": "Date", "Ort (optional)": "Location (optional)",
+  "↩ Erstattung": "↩ Refund", "Erstattung": "Refund", "Datum": "Date", "Ort (optional)": "Location (optional)",
   "Kategorie": "Category", "Bezahlt von": "Paid by", "Notiz (optional)": "Note (optional)",
   "z. B. Strandbar, Altstadt …": "e.g. beach bar, old town …",
   "z. B. Tacos am Strand": "e.g. tacos on the beach",
@@ -989,7 +990,7 @@ function sparkDays(trip, mode) {
     /* Only the trip window itself — advance bookings would otherwise stretch
        the chart over months of empty days. They get one leading bar instead. */
     const pre = tripPreTotal(trip);
-    if (pre > 0) days.push({ iso: "pre", sum: pre, label: "vor", pretty: "vorab gebucht" });
+    if (pre > 0) days.push({ iso: "pre", sum: pre, label: tr("vor"), pretty: tr("vorab gebucht") });
     const startIso = tripStart(trip);
     const endIso = tripWindowEnd(trip);
     from = new Date(startIso); to = new Date(endIso < startIso ? startIso : endIso);
@@ -1609,13 +1610,17 @@ function draftAmount() { return parseFloat((draft.amountStr || "0").replace(",",
 function convText() {
   const amt = draftAmount();
   const sgn = draft.sign === -1 ? "−" : "";
-  return draft.currency !== state.homeCurrency && amt > 0 ? "≈ " + sgn + fmt(toHome(amt, draft.currency)) : "&nbsp;";
+  const conv = draft.currency !== state.homeCurrency && amt > 0 ? "≈ " + sgn + fmt(toHome(amt, draft.currency)) : "";
+  if (draft.sign === -1) return `<span style="color:var(--danger); font-weight:650;">↩ ${tr("Erstattung")}</span>${conv ? " · " + conv : ""}`;
+  return conv || "&nbsp;";
 }
 /* Amount is a REAL input — tapping it opens the OS number pad (same as the
    Kurs field; owner preferred that over the custom keypad overlay). */
 function amountDisplayHTML() {
-  return `<div style="display:flex; align-items:baseline; gap:6px;">
-      ${draft.sign === -1 ? '<span style="font-size:32px; font-weight:750;">−</span>' : ""}
+  /* ± toggle directly at the number (owner: refund must be intuitive, "vor
+     der Zahl") — plus flips to a red − and the conv line says Erstattung */
+  return `<div style="display:flex; align-items:baseline; gap:8px;">
+      <button onclick="toggleRefund()" aria-label="${tr("↩ Erstattung")}" style="flex:none; align-self:center; width:34px; height:34px; border-radius:10px; font-size:${draft.sign === -1 ? 26 : 21}px; font-weight:750; line-height:1; background:${draft.sign === -1 ? "var(--danger-bg)" : "var(--bg)"}; color:${draft.sign === -1 ? "var(--danger)" : "var(--muted)"};">${draft.sign === -1 ? "−" : "±"}</button>
       <input id="amountInput" type="text" inputmode="decimal" autocomplete="off" value="${esc(draft.amountStr)}" placeholder="0"
         oninput="amountTyped(this.value)"
         style="border:none; background:transparent; padding:0; font-size:32px; font-weight:750; letter-spacing:-.02em; flex:none; width:${Math.min(10, (draft.amountStr.length || 1) + 0.5)}ch; border-radius:0;">
@@ -1642,8 +1647,9 @@ function viewAdd() {
   const curs = [...new Set([trip.currency, draft.currency, last && last.currency, ...destCurs, state.homeCurrency, "EUR", "USD"])].filter(Boolean).slice(0, 5);
   /* UX 2.0 order: amount → category → location → note → date, everything
      rarer behind "Mehr Details" — the 5-second core flow stays
-     amount → category → save (owner: Ort direkt nach der Kategorie) */
-  const details = addDetailsOpen || draft.sign === -1;
+     amount → category → save (owner: Ort direkt nach der Kategorie,
+     Erstattung als ±-Toggle im Betragsfeld) */
+  const details = addDetailsOpen;
   return `
   <div class="topbar">
     <button class="pill-btn" style="flex:none;" onclick="cancelAdd()">${tr("Abbrechen")}</button>
@@ -1694,16 +1700,13 @@ function viewAdd() {
       style="width:auto; flex:1; min-width:150px; padding:9px 12px; ${draft.date !== todayISO() && draft.date !== yesterdayISO() ? "border-color:var(--accent);" : ""}">
   </div>
 
-  <button class="btn ghost" style="padding:8px; margin-bottom:8px;" onclick="toggleAddDetails()">${tr(details ? "Weniger Details ▴" : "Mehr Details ▾")}</button>
+  ${tripCountries(trip).length > 1 || (editingExpenseId && state.trips.length > 1) ? `
+  <button class="btn ghost" style="padding:8px; margin-bottom:8px;" onclick="toggleAddDetails()">${tr(details ? "Weniger Details ▴" : "Mehr Details ▾")}</button>` : ""}
   ${details ? `
   ${tripCountries(trip).length > 1 ? `<div class="muted" style="font-weight:600; margin:2px 2px 8px;">${tr("Land")}</div>
   <div class="payer-row">
     ${tripCountries(trip).map(c => `<button class="chip ${draft.country === c.name ? "on" : ""}" onclick="setDraftCountry('${esc(c.name)}')">${countryFlag(c.name)}${esc(countryDisplay(c.name))}</button>`).join("")}
   </div>` : ""}
-
-  <div class="payer-row">
-    <button class="chip ${draft.sign === -1 ? "on" : ""}" onclick="toggleRefund()">${tr("↩ Erstattung")}</button>
-  </div>
   ${editingExpenseId && state.trips.length > 1 ? `<label class="field"><span>${tr("Reise (zum Verschieben ändern)")}</span>
     <select onchange="draft.tripId=this.value">${state.trips.map(t => `<option value="${t.id}" ${t.id === draft.tripId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>` : ""}` : ""}
 
