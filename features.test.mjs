@@ -261,6 +261,77 @@ check("Löschen: weg, Ausgabe behält id, Fallback Sonstiges", afterDel.gone && 
 await page.evaluate(() => applyImport({ version: 3, homeCurrency: "EUR", trips: [], customCategories: [{ id: "cust_x1", name: "Golf", icon: "⚽" }] }, "merge"));
 check("Merge-Import übernimmt eigene Kategorien", await page.evaluate(() => state.customCategories.some(c => c.id === "cust_x1")));
 
+/* 12. trips tab redesign (hero cards, grouping, budget bar) + trip summary */
+await page.evaluate(() => {
+  const today = todayISO();
+  const iso = (off) => { const d = new Date(); d.setDate(d.getDate() + off); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  state.trips = [
+    { id: "tRun", name: "Laufende Reise", budget: 1000, startDate: iso(-2), endDate: iso(3),
+      country: "Mexiko", currency: "MXN", countries: [{ name: "Mexiko", cur: "MXN" }, { name: "Guatemala", cur: "GTQ" }],
+      travelers: ["Ich", "Partnerin"], createdAt: new Date().toISOString(), expenses: [
+        { id: "r1", ts: new Date().toISOString(), date: iso(-30), amount: 200, currency: "EUR", amountHome: 200, rate: 1, rateSource: "live", category: "flug", note: "Flug", payer: "Ich", country: "Mexiko" },
+        { id: "r2", ts: new Date().toISOString(), date: iso(-1), amount: 300, currency: "EUR", amountHome: 300, rate: 1, rateSource: "live", category: "essen", note: "Tacos", payer: "Partnerin", country: "Mexiko" },
+        { id: "r3", ts: new Date().toISOString(), date: today, amount: 100, currency: "EUR", amountHome: 100, rate: 1, rateSource: "live", category: "hotel", note: "", payer: "Ich", country: "Guatemala" },
+      ] },
+    { id: "tPlan", name: "Geplante Reise", budget: 0, startDate: iso(10), endDate: iso(15),
+      country: "Island", currency: "ISK", countries: [{ name: "Island", cur: "ISK" }],
+      travelers: ["Ich"], createdAt: new Date().toISOString(), expenses: [] },
+    { id: "tDone", name: "Alte Reise", budget: 0, startDate: "2024-03-08", endDate: "2024-03-13",
+      country: "Malta", currency: "EUR", countries: [{ name: "Malta", cur: "EUR" }],
+      travelers: ["Ich"], createdAt: "2024-03-08T12:00:00Z", expenses: [
+        { id: "d1", ts: "2024-03-09T12:00:00Z", date: "2024-03-09", amount: 30, currency: "EUR", amountHome: 30, rate: 1, rateSource: "live", category: "hotel", note: "Inn", payer: "Ich" },
+      ] },
+  ];
+  state.activeTripId = "tRun";
+  saveState(); go("trips");
+});
+await page.waitForTimeout(250);
+check("Hero-Karten mit Verlauf", (await page.locator(".trip-hero").count()) === 3);
+const heads = await page.evaluate(() => [...document.querySelectorAll(".day-head")].map(h => h.innerText.trim()));
+check("Gruppen Aktiv + Jahr", heads[0].toLowerCase() === "aktiv" && heads.includes("2024"), heads); /* day-head uppercases via CSS */
+const pills = await page.evaluate(() => [...document.querySelectorAll(".trip-hero .st")].map(p => p.innerText));
+check("Status-Pills läuft + in N Tagen", pills.some(p => p === "läuft") && pills.some(p => p.startsWith("in ")), pills);
+check("Budget-Balken auf Karte", (await page.locator(".trip-card .tbar").count()) === 1);
+const bodyTxt = await page.locator('.trip-card:has-text("Laufende Reise") .trip-body').innerText();
+check("Budget-Zeile 600/1000 · 60 %", bodyTxt.includes("60 %"), bodyTxt);
+/* summary */
+await page.evaluate(() => go("home"));
+await page.waitForTimeout(200);
+await page.click("text=Reise-Zusammenfassung");
+await page.waitForTimeout(250);
+check("Zusammenfassung öffnet", (await page.locator('.title:has-text("Zusammenfassung")').count()) === 1);
+const sumTxt = await page.locator("#app").innerText();
+check("Gesamt + Budget-Pille", sumTxt.includes("Gesamt ausgegeben") && sumTxt.includes("im Budget"), null);
+check("Kennzahlen-KPIs", sumTxt.includes("Tage mit Ausgaben") && sumTxt.includes("Ø pro Ausgabe") && sumTxt.includes("vorab gebucht"), null);
+check("Nach Kategorie + Land + Bezahlt", sumTxt.includes("Nach Kategorie") && sumTxt.includes("Nach Land") && sumTxt.includes("Wer hat bezahlt?"), null);
+await page.evaluate(() => goBack());
+await page.waitForTimeout(200);
+check("Zurück zur Übersicht", await page.evaluate(() => state.ui.view) === "home");
+
+/* 13. payment method (card/cash) */
+await page.evaluate(() => startAdd());
+await page.waitForTimeout(150);
+check("Zahlung-Chips 💳/💵", (await page.locator('.chip:has-text("💳")').count()) === 1 && (await page.locator('.chip:has-text("💵")').count()) === 1);
+await page.click('.chip:has-text("💵")');
+await page.waitForTimeout(150);
+check("Bar ausgewählt", await page.evaluate(() => draft.payMethod) === "cash");
+await page.evaluate(() => { amountTyped("25"); setCat("essen"); saveExpense(); });
+await page.waitForTimeout(150);
+const payE = await page.evaluate(() => state.trips.find(t => t.id === "tRun").expenses.at(-1));
+check("payMethod gespeichert", payE.payMethod === "cash", payE.payMethod);
+await page.evaluate(() => startAdd());
+await page.waitForTimeout(150);
+check("Kontinuität: nächster Eintrag startet mit Bar", await page.evaluate(() => draft.payMethod) === "cash");
+await page.evaluate(() => { setPayMethod("cash"); }); /* toggle off */
+await page.waitForTimeout(100);
+check("Nochmal tippen wählt ab", await page.evaluate(() => draft.payMethod) === null);
+await page.evaluate(() => cancelAdd());
+const payCsv = await page.evaluate(() => buildCSV(state.trips.filter(t => t.id === "tRun"), true));
+check("CSV-Spalte Zahlung + Wert Bar", payCsv.split("\r\n")[0].includes(";Zahlung;") && payCsv.includes(";Bar;"), payCsv.split("\r\n")[0]);
+await page.evaluate(() => go("expenses"));
+await page.waitForTimeout(150);
+check("💵-Icon in der Liste", (await page.locator("#expList").innerText()).includes("💵"));
+
 await page.evaluate(() => go("home"));
 await page.waitForTimeout(200);
 await page.screenshot({ path: "shot-v26-home.png" });

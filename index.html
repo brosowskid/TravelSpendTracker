@@ -119,8 +119,6 @@
   .spark .bar { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; opacity: .45; }
   .spark .col.today .bar { opacity: 1; }
   /* advance bookings, summed into one bar in front of the trip window */
-  .spark .col.pre { border-right: 1px dashed var(--line); padding-right: 4px; margin-right: 4px; }
-  .spark .col.pre .bar { background: var(--muted); opacity: .5; }
   .spark .d { font-size: 9px; color: var(--muted); }
   /* long trips: the chart scrolls horizontally (swipe like the chip row) —
      every day keeps a full-size horizontal number and a decently wide bar */
@@ -146,6 +144,18 @@
   .exp .amts { text-align: right; flex: none; }
   .exp .home { font-size: 14.5px; font-weight: 750; }
   .exp .orig { font-size: 11.5px; color: var(--muted); }
+
+  /* ---------- Trip cards (Reisen tab + summary hero) ---------- */
+  .trip-card { padding: 0; overflow: hidden; }
+  .trip-hero { position: relative; padding: 14px 16px 12px; color: #fff; }
+  .trip-hero .fl { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 52px; opacity: .3; letter-spacing: 3px; pointer-events: none; white-space: nowrap; }
+  .trip-hero .nm { position: relative; font-size: 18px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 70px; }
+  .trip-hero .dt { position: relative; font-size: 12.5px; opacity: .95; margin-top: 2px; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .trip-hero .st { position: absolute; right: 12px; top: 12px; font-size: 11px; font-weight: 750; background: rgba(255,255,255,.25); backdrop-filter: blur(4px); padding: 3px 9px; border-radius: 999px; text-shadow: none; }
+  .trip-body { padding: 10px 16px 12px; }
+  .tbar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 8px; }
+  .tbar > div { height: 100%; border-radius: 999px; background: var(--accent); }
+  .tbar > div.over { background: var(--danger); }
 
   /* ---------- Add screen ---------- */
   /* amount as a tappable FIELD (reference design): white card, left-aligned
@@ -193,9 +203,12 @@
   .nav-btn.on { color: var(--accent-deep); font-weight: 800; }
   .nav-btn.on .i { background: var(--accent); background: color-mix(in srgb, var(--accent) 55%, var(--card)); box-shadow: 0 2px 6px rgba(13,148,136,.25); }
   .fab {
-    flex: none; width: 58px; height: 58px; margin: -26px 6px 0; border-radius: 50%;
+    flex: none; width: 58px; height: 58px; margin: -34px 6px 0; border-radius: 50%;
     background: var(--accent); color: var(--on-accent); font-size: 30px; font-weight: 500;
-    box-shadow: 0 6px 18px rgba(13,148,136,.4); display: flex; align-items: center; justify-content: center;
+    /* raised out of the nav with a nav-colored ring — reads as a cradle
+       notch (owner-supplied reference); drop shadow keeps the float */
+    box-shadow: 0 0 0 5px var(--nav-bg), 0 6px 18px rgba(13,148,136,.4);
+    display: flex; align-items: center; justify-content: center;
     /* the "+" glyph sits low in its em box — flex centers the box, not the
        ink; measured 3px offset, compensated here so the plus is dead center */
     padding-bottom: 6px;
@@ -344,6 +357,14 @@ const EN = {
   "Neue Ausgabe": "New expense", "Ausgabe bearbeiten": "Edit expense",
   "Abbrechen": "Cancel", "Hinzufügen": "Add", "Speichern": "Save",
   "↩ Erstattung": "↩ Refund", "Erstattung": "Refund",
+  "Aktiv": "Active", "läuft": "ongoing", "abgeschlossen": "completed",
+  "Reise-Zusammenfassung": "Trip summary", "Zusammenfassung": "Summary",
+  "Gesamt ausgegeben": "Total spent", "im Budget · {x} übrig": "within budget · {x} left",
+  "über Budget · +{x}": "over budget · +{x}", "von {b} Budget": "of {b} budget",
+  "Kennzahlen": "Key figures", "Tage mit Ausgaben": "days with expenses",
+  "Zahlung": "Payment", "Zahlung (optional)": "Payment (optional)",
+  "Ø pro Tag vor Ort": "Ø per day on location", "Ø pro Ausgabe": "Ø per expense",
+  "größte": "largest", "kleinste": "smallest",
   "Eigene": "Custom", "Eigene Kategorie": "Custom category", "Eigene Kategorien": "Custom categories",
   "Name": "Name", "Symbol": "Icon", "z. B. Tauchen": "e.g. Diving",
   "Kategorie anlegen": "Create category", "Gibt es schon": "Already exists",
@@ -1044,9 +1065,9 @@ function sparkDays(trip, mode) {
     to = new Date(); from = new Date(); from.setDate(from.getDate() - 13);
   } else {
     /* Only the trip window itself — advance bookings would otherwise stretch
-       the chart over months of empty days. They get one leading bar instead. */
-    const pre = tripPreTotal(trip);
-    if (pre > 0) days.push({ iso: "pre", sum: pre, label: tr("vor"), pretty: tr("vorab gebucht") });
+       the chart over months of empty days. They are summed in a line ABOVE
+       the chart (not as a bar: one 1.450-€ flight bar would flatten every
+       70-€ travel day into invisibility — the daily scale stays honest). */
     const startIso = tripStart(trip);
     const endIso = tripWindowEnd(trip);
     from = new Date(startIso); to = new Date(endIso < startIso ? startIso : endIso);
@@ -1079,7 +1100,7 @@ function csvEscape(v) { v = String(v ?? ""); return /[";\n,]/.test(v) ? '"' + v.
 function buildCSV(trips, germanExcel) {
   const sep = germanExcel ? ";" : ",";
   const num = (n) => germanExcel ? String(n.toFixed(2)).replace(".", ",") : n.toFixed(2);
-  const head = [tr("Datum"), tr("Zeitstempel"), tr("Reise"), tr("Land"), tr("Ort"), tr("Beschreibung"), tr("Kategorie"), tr("Betrag"), tr("Währung"), tr("Betrag ({c})", { c: state.homeCurrency }), tr("Kurs"), tr("Bezahlt von"), tr("Notiz")];
+  const head = [tr("Datum"), tr("Zeitstempel"), tr("Reise"), tr("Land"), tr("Ort"), tr("Beschreibung"), tr("Kategorie"), tr("Betrag"), tr("Währung"), tr("Betrag ({c})", { c: state.homeCurrency }), tr("Kurs"), tr("Bezahlt von"), tr("Zahlung"), tr("Notiz")];
   const rows = [head.join(sep)];
   for (const t of trips) {
     for (const e of (t.expenses || []).slice().sort((a, b) => a.date.localeCompare(b.date))) {
@@ -1089,7 +1110,7 @@ function buildCSV(trips, germanExcel) {
         csvEscape(e.note || tr(catById(e.category).name)), csvEscape(tr(catById(e.category).name)),
         num(e.amount), e.currency, num(e.amountHome),
         germanExcel ? String((e.rate || 1).toFixed(4)).replace(".", ",") : (e.rate || 1).toFixed(4),
-        csvEscape(e.payer || ""), csvEscape(e.note || ""),
+        csvEscape(e.payer || ""), payLabel(e.payMethod), csvEscape(e.note || ""),
       ].join(sep));
     }
   }
@@ -1331,6 +1352,7 @@ function render() {
     case "add-trip": app.innerHTML = viewAddTrip(); break;
     case "more": app.innerHTML = viewMore(); break;
     case "map": app.innerHTML = viewMap(); break;
+    case "summary": app.innerHTML = viewSummary(); break;
     default: app.innerHTML = viewHome();
   }
   renderNav();
@@ -1407,7 +1429,7 @@ function viewHome() {
   const spark = sparkMode === "14" ? sparkDays(trip, "14") : tripSpark;
   const maxSpark = Math.max(1, ...spark.map(d => d.sum));
   const sparkSub = (() => {
-    const real = spark.filter(d => d.iso !== "pre");
+    const real = spark;
     if (!real.length) return "";
     if (sparkMode === "14") return tr("Letzte 14 Kalendertage");
     const f = real[0].iso, l = real[real.length - 1].iso;
@@ -1505,8 +1527,11 @@ function viewHome() {
       </div>` : ""}
     </div>
     ${sparkSub ? `<div class="muted" style="font-size:11.5px; margin-top:3px;">${sparkSub}</div>` : ""}
+    ${sparkMode !== "14" && preTotal > 0 ? `<div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; padding:7px 2px 3px; border-bottom:1px dashed var(--line); margin-bottom:4px;">
+      <span class="muted">${tr("vorab gebucht")}</span><b>${fmtShort(preTotal)}</b>
+    </div>` : ""}
     <div class="spark ${spark.length > 20 ? "scroll" : ""}" ${spark.length > 20 && spark[spark.length - 1].iso === todayISO() ? 'data-end="1"' : ""}>
-      ${spark.map(d => `<div class="col ${d.iso === todayISO() ? "today" : ""} ${d.iso === "pre" ? "pre" : ""}" onclick="toast('${d.pretty}: ${fmtShort(d.sum)}')"><div class="bar" style="height:${Math.round(d.sum / maxSpark * 58)}px"></div><div class="d">${d.label}</div></div>`).join("")}
+      ${spark.map(d => `<div class="col ${d.iso === todayISO() ? "today" : ""}" onclick="toast('${d.pretty}: ${fmtShort(d.sum)}')"><div class="bar" style="height:${Math.round(d.sum / maxSpark * 58)}px"></div><div class="d">${d.label}</div></div>`).join("")}
     </div>
     ${spark.length > 20 ? `<div class="muted" style="font-size:11px; text-align:center; margin-top:6px;">${tr("← wischen · Balken antippen für Details")}</div>` : ""}
   </div>
@@ -1514,6 +1539,12 @@ function viewHome() {
   ${hasCoordsIn(trip.expenses) ? `<div class="card" style="display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer;" onclick="openMapMaybe()">
     <span style="flex:none; display:flex;">${MAP_ICON}</span>
     <div style="flex:1; font-weight:650;">${tr("Karte dieser Reise")}</div>
+    <span class="muted" style="font-size:18px;">›</span>
+  </div>` : ""}
+
+  ${(trip.expenses || []).length ? `<div class="card" style="display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer;" onclick="openSummary()">
+    <span style="flex:none; font-size:20px;">📊</span>
+    <div style="flex:1; font-weight:650;">${tr("Reise-Zusammenfassung")}</div>
     <span class="muted" style="font-size:18px;">›</span>
   </div>` : ""}
 
@@ -1581,7 +1612,7 @@ function expListHTML(trip) {
         return `<div class="exp" onclick="editExpense('${e.id}')">
           <div class="cat-ico">${c.icon}</div>
           <div class="info"><div class="t">${esc(e.note || tr(c.name))}</div>
-            ${(() => { const sub = [e.note ? tr(c.name) : null, e.location && e.location.label ? "📍 " + e.location.label : null, tripTravelers(trip).length > 1 ? e.payer : null].filter(Boolean).join(" · "); return sub ? `<div class="s">${esc(sub)}</div>` : ""; })()}</div>
+            ${(() => { const sub = [e.note ? tr(c.name) : null, payIcon(e.payMethod) || null, e.location && e.location.label ? "📍 " + e.location.label : null, tripTravelers(trip).length > 1 ? e.payer : null].filter(Boolean).join(" · "); return sub ? `<div class="s">${esc(sub)}</div>` : ""; })()}</div>
           <div class="amts"><div class="home">${fmt(e.amountHome)}</div>
             ${e.currency !== state.homeCurrency ? `<div class="orig">${fmt(e.amount, e.currency)}</div>` : ""}</div>
         </div>`;
@@ -1640,6 +1671,7 @@ function startAdd() {
     payer: last ? (last.payer || tripTravelers(trip)[0]) : tripTravelers(trip)[0],
     country: defaultExpCountry(trip, last),
     location: null,
+    payMethod: last ? last.payMethod || null : null, /* continuity: cash streaks stay cash */
   };
   go("add");
 }
@@ -1661,10 +1693,21 @@ function editExpense(id) {
   draft = { amountStr: String(Math.abs(e.amount)).replace(".", ","), sign: e.amount < 0 ? -1 : 1,
     currency: e.currency, category: e.category, note: e.note || "", date: e.date,
     payer: e.payer || tripTravelers(trip)[0], rate: e.rate,
-    country: e.country || null, tripId: trip.id, location: e.location || null };
+    country: e.country || null, tripId: trip.id, location: e.location || null,
+    payMethod: e.payMethod || null };
   go("add");
 }
 function draftAmount() { return parseFloat((draft.amountStr || "0").replace(",", ".")) || 0; }
+
+/* Payment method (card/cash). "Karte" can't be a tr() key — it already means
+   the map — so the labels resolve directly by language. */
+function payLabel(m) {
+  if (m === "card") return appLang() === "de" ? "Karte" : "Card";
+  if (m === "cash") return appLang() === "de" ? "Bar" : "Cash";
+  return "";
+}
+function payIcon(m) { return m === "card" ? "💳" : m === "cash" ? "💵" : ""; }
+function setPayMethod(m) { draft.payMethod = draft.payMethod === m ? null : m; render(); }
 
 function convText() {
   const amt = draftAmount();
@@ -1758,6 +1801,12 @@ function viewAdd() {
     <button class="chip ${draft.date === yesterdayISO() ? "on" : ""}" onclick="setDraftDate(yesterdayISO())">${tr("Gestern")}</button>
     <input type="date" value="${draft.date}" max="${todayISO()}" onchange="setDraftDate(this.value)"
       style="width:auto; flex:1; min-width:150px; padding:9px 12px; ${draft.date !== todayISO() && draft.date !== yesterdayISO() ? "border-color:var(--accent);" : ""}">
+  </div>
+
+  <div class="muted" style="font-weight:600; margin:2px 2px 8px;">${tr("Zahlung (optional)")}</div>
+  <div class="payer-row">
+    <button class="chip ${draft.payMethod === "card" ? "on" : ""}" onclick="setPayMethod('card')">💳 ${payLabel("card")}</button>
+    <button class="chip ${draft.payMethod === "cash" ? "on" : ""}" onclick="setPayMethod('cash')">💵 ${payLabel("cash")}</button>
   </div>
 
   ${tripCountries(trip).length > 1 || (editingExpenseId && state.trips.length > 1) ? `
@@ -1990,6 +2039,7 @@ function saveExpense() {
     payer: draft.payer,
     country: draft.country || null,
     location: draft.location || null,
+    payMethod: draft.payMethod || null, /* "card" | "cash" | null */
     rateSource,
   };
   let movedTo = null;
@@ -2044,6 +2094,55 @@ function undoDelete() {
 }
 
 /* ----- Trips ----- */
+/* Deterministic gradient per trip (no photos yet — IndexedDB first): the id
+   hashes into a curated palette, so every trip keeps its color forever. */
+const TRIP_GRADS = [["#14b8a6", "#0f766e"], ["#6366f1", "#4338ca"], ["#ec4899", "#be185d"],
+  ["#f59e0b", "#b45309"], ["#0ea5e9", "#0369a1"], ["#8b5cf6", "#6d28d9"],
+  ["#10b981", "#047857"], ["#f43f5e", "#be123c"]];
+function tripGrad(id) {
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const [a, b] = TRIP_GRADS[h % TRIP_GRADS.length];
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+function tripStatus(t) {
+  const today = todayISO();
+  if ((t.startDate || "") > today) {
+    const n = Math.round((new Date(t.startDate) - new Date(today)) / 864e5);
+    return { key: "planned", label: n === 1 ? tr("in 1 Tag") : tr("in {n} Tagen", { n }) };
+  }
+  if (!t.endDate || t.endDate >= today) return { key: "run", label: tr("läuft") };
+  return { key: "done", label: tr("abgeschlossen") };
+}
+function tripCardHTML(t, { showStatus } = {}) {
+  const D = (iso) => iso ? Number(iso.slice(8, 10)) + "." + Number(iso.slice(5, 7)) + "." : "";
+  const total = tripTotal(t);
+  const days = tripDays(t);
+  const flags = tripCountries(t).map(c => countryFlag(c.name)).join("").trim();
+  const st = tripStatus(t);
+  const pct = t.budget > 0 ? Math.round(total / t.budget * 100) : 0;
+  return `
+    <div class="card trip-card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
+      <div class="trip-hero" style="background:${tripGrad(t.id)};">
+        ${flags ? `<div class="fl">${flags}</div>` : ""}
+        ${showStatus && st.key !== "done" ? `<div class="st">${st.label}</div>` : ""}
+        <div class="nm">${esc(t.name)}</div>
+        <div class="dt">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") + " · " : ""}${days === 1 ? tr("1 Tag") : tr("{n} Tage", { n: days })}</div>
+      </div>
+      <div class="trip-body">
+        <div class="row">
+          <div style="font-weight:800; font-size:17px;">${fmtShort(total)}<span class="muted" style="font-weight:500; font-size:13px;">${total && days ? " · Ø " + fmtShort(total / days) + tr("/Tag") : ""}</span></div>
+          <div style="display:flex; align-items:center; gap:8px; flex:none;">
+            ${t.id === state.activeTripId ? '<span class="pill">' + tr("ausgewählt") + "</span>" : ""}
+            <button class="btn ghost" style="width:auto;padding:4px 10px;" onclick="event.stopPropagation(); editTrip('${t.id}')">✎</button>
+          </div>
+        </div>
+        ${t.budget > 0 ? `
+        <div class="tbar"><div class="${pct > 100 ? "over" : ""}" style="width:${Math.min(100, Math.max(2, pct))}%;"></div></div>
+        <div class="muted" style="font-size:12px; margin-top:4px;">${fmtShort(total)} / ${fmtShort(t.budget)} · ${pct} %</div>` : ""}
+      </div>
+    </div>`;
+}
 function viewTrips() {
   return `
   <div class="topbar"><div class="title">${tr("Reisen")}</div>
@@ -2054,35 +2153,109 @@ function viewTrips() {
   </div>
   ${(() => {
     const sorted = state.trips.slice().sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""));
-    const D = (iso) => iso ? Number(iso.slice(8, 10)) + "." + Number(iso.slice(5, 7)) + "." : "";
-    let year = null, out = "";
-    for (const t of sorted) {
+    const active = sorted.filter(t => tripStatus(t).key !== "done");
+    const done = sorted.filter(t => tripStatus(t).key === "done");
+    let out = "";
+    if (active.length) {
+      out += `<div class="day-head"><span>${tr("Aktiv")}</span></div>`;
+      out += active.map(t => tripCardHTML(t, { showStatus: true })).join("");
+    }
+    let year = null;
+    for (const t of done) {
       const y = (t.startDate || "").slice(0, 4);
       if (y !== year) { year = y; out += `<div class="day-head"><span>${y}</span></div>`; }
-      const total = tripTotal(t);
-      const days = tripDays(t);
-      const flags = tripCountries(t).map(c => countryFlag(c.name)).join("").trim();
-      out += `
-    <div class="card" onclick="switchTrip('${t.id}','trips')" style="cursor:pointer; ${t.id === state.activeTripId ? "border:2px solid var(--accent);" : ""}">
-      <div class="row">
-        <div style="min-width:0;">
-          ${flags ? `<div style="font-size:17px; line-height:1.2; margin-bottom:3px;">${flags}</div>` : ""}
-          <div class="h2" style="margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(t.name)}</div>
-        </div>
-        <div style="text-align:right; flex:none;"><div style="font-weight:800; font-size:17px;">${fmtShort(total)}</div>
-          <div style="display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:4px;">
-            ${t.id === state.activeTripId ? '<span class="pill">' + tr("ausgewählt") + "</span>" : ""}
-            <button class="btn ghost" style="width:auto;padding:4px 10px;" onclick="event.stopPropagation(); editTrip('${t.id}')">✎</button>
-          </div></div>
-      </div>
-      <div class="muted" style="margin-top:8px;">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") : ""} · ${days === 1 ? tr("1 Tag") : tr("{n} Tage", { n: days })}${total && days ? " · Ø " + fmtShort(total / days) + tr("/Tag") : ""}</div>
-    </div>`;
+      out += tripCardHTML(t, {});
     }
     return out;
   })()}
   <p class="muted" style="margin:2px 4px 14px;">${tr("Neue Ausgaben landen immer in der ausgewählten Reise – zum Wechseln einfach eine andere antippen. Neue Reise: + oben rechts.")}</p>`;
 }
 function switchTrip(id, from) { state.activeTripId = id; expFilter = { q: "", cat: null, country: null }; saveState(); go("home", from); }
+
+/* ----- Trip summary ("die ganze Reise auf einen Blick") ----- */
+function openSummary() { go("summary", "home"); }
+function viewSummary() {
+  const t = activeTrip();
+  if (!t) return viewHome();
+  const D = (iso) => iso ? Number(iso.slice(8, 10)) + "." + Number(iso.slice(5, 7)) + "." : "";
+  const exps = t.expenses || [];
+  const total = tripTotal(t);
+  const days = tripDays(t);
+  const pre = tripPreTotal(t);
+  const flags = tripCountries(t).map(c => countryFlag(c.name)).join("").trim();
+  const st = tripStatus(t);
+  const activeDays = new Set(exps.filter(e => !t.startDate || e.date >= t.startDate).map(e => e.date)).size;
+  const positives = exps.filter(e => e.amountHome > 0);
+  const biggest = positives.length ? positives.reduce((a, b) => a.amountHome > b.amountHome ? a : b) : null;
+  const smallest = positives.length ? positives.reduce((a, b) => a.amountHome < b.amountHome ? a : b) : null;
+  const cats = byCategory(t).filter(([, s]) => s > 0);
+  const catSum = cats.reduce((s, [, x]) => s + x, 0);
+  const countries = byCountry(t);
+  const travelers = tripTravelers(t);
+  const payers = byPayer(t);
+  const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  return `
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+      ${backBtnHTML() || `<button class="icon-btn" onclick="go('home')" aria-label="${tr("Zurück")}" style="font-size:22px;">‹</button>`}
+      <div class="title">${tr("Zusammenfassung")}</div>
+    </div>
+  </div>
+
+  <div class="card trip-card">
+    <div class="trip-hero" style="background:${tripGrad(t.id)};">
+      ${flags ? `<div class="fl">${flags}</div>` : ""}
+      ${st.key !== "done" ? `<div class="st">${st.label}</div>` : ""}
+      <div class="nm">${esc(t.name)}</div>
+      <div class="dt">${t.startDate ? D(t.startDate) + (t.endDate ? "–" + D(t.endDate) : "") + " · " : ""}${days === 1 ? tr("1 Tag") : tr("{n} Tage", { n: days })}</div>
+    </div>
+    <div class="trip-body" style="text-align:center; padding-top:14px;">
+      <div class="muted" style="font-size:12px; font-weight:650; letter-spacing:.04em;">${tr("Gesamt ausgegeben")}</div>
+      <div style="font-size:30px; font-weight:800; letter-spacing:-.02em; margin-top:2px;">${fmt(total)}</div>
+      ${t.budget > 0 ? `
+      <div style="margin-top:8px;"><span class="pill" style="background:${total <= t.budget ? "var(--accent-soft)" : "var(--danger-bg)"}; color:${total <= t.budget ? "var(--accent-deep)" : "var(--danger)"};">${total <= t.budget ? tr("im Budget · {x} übrig", { x: fmtShort(t.budget - total) }) : tr("über Budget · +{x}", { x: fmtShort(total - t.budget) })}</span></div>
+      <div class="muted" style="font-size:12px; margin-top:6px;">${tr("von {b} Budget", { b: fmtShort(t.budget) })}</div>` : ""}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="h2">${tr("Kennzahlen")}</div>
+    <div class="kpis" style="grid-template-columns:1fr 1fr;">
+      ${kpi(exps.length, tr("Ausgaben"))}
+      ${kpi(activeDays, tr("Tage mit Ausgaben"))}
+      ${kpi(fmtShort(days ? (total - pre) / days : 0), tr("Ø pro Tag vor Ort"))}
+      ${kpi(fmtShort(exps.length ? total / exps.length : 0), tr("Ø pro Ausgabe"))}
+      ${biggest ? kpi(fmtShort(biggest.amountHome), tr("größte") + ": " + esc((biggest.note || tr(catById(biggest.category).name)).slice(0, 22))) : ""}
+      ${smallest ? kpi(fmtShort(smallest.amountHome), tr("kleinste") + ": " + esc((smallest.note || tr(catById(smallest.category).name)).slice(0, 22))) : ""}
+      ${pre > 0 ? kpi(fmtShort(pre), tr("vorab gebucht ({p} % der Kosten)", { p: total ? Math.round(pre / total * 100) : 0 })) : ""}
+    </div>
+  </div>
+
+  ${cats.length ? `<div class="card">
+    <div class="h2">${tr("Nach Kategorie")}</div>
+    <div style="display:flex; height:10px; border-radius:999px; overflow:hidden; gap:2px; margin-bottom:12px;">
+      ${cats.map(([cid, s]) => `<div style="flex:${Math.max(1, Math.round(s / catSum * 100))}; background:${catColor(cid)};"></div>`).join("")}
+    </div>
+    ${cats.map(([cid, s]) => {
+      const c = catById(cid);
+      return `<div class="cat-row">
+        <div class="cat-ico">${c.icon}</div>
+        <div class="cat-mid"><div class="cat-name">${esc(tr(c.name))} <span class="muted" style="font-weight:400;">· ${catSum ? Math.round(s / catSum * 100) : 0} %</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${Math.max(3, Math.round(s / cats[0][1] * 100))}%; background:${catColor(cid)};"></div></div></div>
+        <div class="cat-amt">${fmtShort(s)}</div></div>`;
+    }).join("")}
+  </div>` : ""}
+
+  ${tripCountries(t).length > 1 && countries.some(([k]) => k !== "—") ? `<div class="card">
+    <div class="h2">${tr("Nach Land")}</div>
+    ${countries.map(([n, s]) => `<div class="list-item"><b>${n === "—" ? tr("ohne Angabe") : countryFlag(n) + esc(countryDisplay(n))}</b><div style="font-weight:750;">${fmtShort(s)}</div></div>`).join("")}
+  </div>` : ""}
+
+  ${travelers.length > 1 ? `<div class="card">
+    <div class="h2">${tr("Wer hat bezahlt?")}</div>
+    ${travelers.map(p => `<div class="list-item"><b>${esc(p)}</b><div style="font-weight:750;">${fmtShort(payers[p] || 0)}</div></div>`).join("")}
+  </div>` : ""}`;
+}
 
 /* ----- Cross-trip statistics ----- */
 let statsYear = null; /* null = all years; transient */
